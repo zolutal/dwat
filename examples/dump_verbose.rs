@@ -1,5 +1,5 @@
-use rshole_rewrite::format::print_struct;
-use rshole_rewrite::Dwarf;
+use dwat::format::print_struct;
+use dwat::Dwarf;
 
 use std::fs::File;
 use memmap2::Mmap;
