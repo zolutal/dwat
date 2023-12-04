@@ -19,9 +19,10 @@ My focus so far has been on making the type information (specifically structs) p
 
 # Examples
 
-There are several examples in the `examples` directory. The following will roughly describe the `lookup` example in that directory.
+There are several examples in the `examples` directory, the following will roughly describe the `lookup` example.
 
 ---
+
 
 The first step of using the library is to load the file containing DWARF info into memory, and then invoke `Dwarf::parse`:
 
@@ -32,7 +33,7 @@ The first step of using the library is to load the file containing DWARF info in
     let dwarf = Dwarf::parse(&*mmap)?;
 ```
 
-You can then, for example, use the `lookup_struct` function on the Dwarf object to get an object representing a struct in the dwarf information with the specified name:
+The dwarf object has a `lookup_item` method that can be used to lookup any type implementing the `Tagged` trait by name, in this case a struct will be searched for:
 
 ```rust
     let found = dwarf.lookup_item<dwat::Struct>(struct_name)?;
