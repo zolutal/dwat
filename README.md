@@ -1,6 +1,6 @@
 # dwat
 
-A fairly performant library intended to make DWARF (V4/v5) debugging information more accessible. 
+A fairly performant library intended to make DWARF (v4/v5) debugging information more accessible. 
 
 My focus so far has been on making the type information (specifically structs) present in DWARF info easier to work with, so functionality related to that is largely what is implemented at this point.
 
