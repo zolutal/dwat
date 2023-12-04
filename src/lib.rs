@@ -11,7 +11,7 @@ pub mod prelude {
     pub use super::TypeModifier;
 }
 
-/// Abbreviations for some lengthy gimli types
+// Abbreviations for some lengthy gimli types
 type R<'a> = gimli::EndianSlice<'a, RunTimeEndian>;
 type DIE<'a> = gimli::DebuggingInformationEntry<'a, 'a, R<'a>, usize>;
 type CU<'a> = gimli::Unit<R<'a>, usize>;
@@ -132,9 +132,9 @@ pub enum MemberType {
 }
 
 /// Try to retrieve a string from the debug_str section for a given offset
-fn from_dbg_str_ref(parser: &Dwarf, str_ref: DebugStrOffset<usize>)
+fn from_dbg_str_ref(dwarf: &Dwarf, str_ref: DebugStrOffset<usize>)
 -> Option<String> {
-    let dwarf = parser.borrow_dwarf();
+    let dwarf = dwarf.borrow_dwarf();
     if let Ok(str_ref) = dwarf.debug_str.get_str(str_ref) {
         let str_ref = str_ref.to_string_lossy();
         return Some(str_ref.to_string());
@@ -143,7 +143,7 @@ fn from_dbg_str_ref(parser: &Dwarf, str_ref: DebugStrOffset<usize>)
 }
 
 /// Try to retrieve the name attribute as a string for a DIE if one exists
-fn get_entry_name(parser: &Dwarf, entry: &DIE) -> Option<String> {
+fn get_entry_name(dwarf: &Dwarf, entry: &DIE) -> Option<String> {
     let mut attrs = entry.attrs();
     while let Ok(Some(attr)) = &attrs.next() {
         if attr.name() == gimli::DW_AT_name {
@@ -154,7 +154,7 @@ fn get_entry_name(parser: &Dwarf, entry: &DIE) -> Option<String> {
                     }
                 }
                 gimli::AttributeValue::DebugStrRef(strref) => {
-                    return from_dbg_str_ref(parser, strref)
+                    return from_dbg_str_ref(dwarf, strref)
                 }
                 _ => { }
             };
@@ -171,9 +171,9 @@ pub trait NamedType {
     // in that case: return Ok(None)
     // Ok(Err(..)) is only returned when something went wrong seeking the
     // member's location
-    fn name(&self, parser: &Dwarf) -> Option<String> {
-        parser.entry_context(&self.location(), |entry| {
-            let name = get_entry_name(parser, entry);
+    fn name(&self, dwarf: &Dwarf) -> Option<String> {
+        dwarf.entry_context(&self.location(), |entry| {
+            let name = get_entry_name(dwarf, entry);
             name
         }).unwrap()
     }
@@ -245,13 +245,144 @@ impl NamedType for Subrange {
     }
 }
 
+impl NamedType for Variable {
+    fn location(&self) -> Location {
+        self.location
+    }
+}
+
+pub trait Tagged {
+    fn new(location: Location) -> Self;
+    fn tag() -> gimli::DwTag;
+}
+
+impl Tagged for Struct {
+    fn new(location: Location) -> Self {
+        Self { location }
+    }
+
+    fn tag() -> gimli::DwTag {
+        gimli::DW_TAG_structure_type
+    }
+}
+
+impl Tagged for Array {
+    fn new(location: Location) -> Self {
+        Self { location }
+    }
+
+    fn tag() -> gimli::DwTag {
+        gimli::DW_TAG_array_type
+    }
+}
+
+impl Tagged for Enum {
+    fn new(location: Location) -> Self {
+        Self { location }
+    }
+
+    fn tag() -> gimli::DwTag {
+        gimli::DW_TAG_enumeration_type
+    }
+}
+
+impl Tagged for Pointer {
+    fn new(location: Location) -> Self {
+        Self { location }
+    }
+
+    fn tag() -> gimli::DwTag {
+        gimli::DW_TAG_pointer_type
+    }
+}
+
+impl Tagged for Subroutine {
+    fn new(location: Location) -> Self {
+        Self { location }
+    }
+
+    fn tag() -> gimli::DwTag {
+        gimli::DW_TAG_subroutine_type
+    }
+}
+
+impl Tagged for Typedef {
+    fn new(location: Location) -> Self {
+        Self { location }
+    }
+
+    fn tag() -> gimli::DwTag {
+        gimli::DW_TAG_typedef
+    }
+}
+
+impl Tagged for Union {
+    fn new(location: Location) -> Self {
+        Self { location }
+    }
+
+    fn tag() -> gimli::DwTag {
+        gimli::DW_TAG_union_type
+    }
+}
+
+impl Tagged for Base {
+    fn new(location: Location) -> Self {
+        Self { location }
+    }
+
+    fn tag() -> gimli::DwTag {
+        gimli::DW_TAG_base_type
+    }
+}
+
+impl Tagged for Const {
+    fn new(location: Location) -> Self {
+        Self { location }
+    }
+
+    fn tag() -> gimli::DwTag {
+        gimli::DW_TAG_const_type
+    }
+}
+
+impl Tagged for Volatile {
+    fn new(location: Location) -> Self {
+        Self { location }
+    }
+
+    fn tag() -> gimli::DwTag {
+        gimli::DW_TAG_volatile_type
+    }
+}
+
+impl Tagged for Subrange {
+    fn new(location: Location) -> Self {
+        Self { location }
+    }
+
+    fn tag() -> gimli::DwTag {
+        gimli::DW_TAG_subrange_type
+    }
+}
+
+impl Tagged for Variable {
+    fn new(location: Location) -> Self {
+        Self { location }
+    }
+
+    fn tag() -> gimli::DwTag {
+        gimli::DW_TAG_variable
+    }
+}
+
 // Types which contain another type
 pub trait TypeModifier {
     fn location(&self) -> Location;
 
-    fn get_type(&self, parser: &Dwarf)
+    fn get_type(&self, dwarf: &Dwarf)
     -> Result<Option<MemberType>, Error> {
-        parser.entry_context(&self.location().clone(), |entry|
+        dwarf.entry_context(&self.location().clone(), |entry|
          -> Result<Option<MemberType>, Error> {
             let mut attrs = entry.attrs();
             while let Ok(Some(attr)) = attrs.next() {
@@ -261,7 +392,7 @@ pub trait TypeModifier {
                             header: self.location().header,
                             offset,
                         };
-                        return parser.entry_context(&type_loc, |entry| {
+                        return dwarf.entry_context(&type_loc, |entry| {
                             return Ok(Some(entry_to_type(type_loc, entry)));
                         })?
                     }
@@ -291,9 +422,9 @@ impl TypeModifier for FormalParameter {
 }
 
 impl Subroutine {
-    pub fn get_params(&self, parser: &Dwarf)
+    pub fn get_params(&self, dwarf: &Dwarf)
     -> Result<Vec<FormalParameter>, Error> {
-        parser.unit_context(&self.location.clone(), |unit| {
+        dwarf.unit_context(&self.location.clone(), |unit| {
             let mut params: Vec<FormalParameter> = vec![];
             let mut entries = {
                 match unit.entries_at_offset(self.location.offset) {
@@ -363,8 +494,8 @@ fn entry_to_type (location: Location, entry: &DIE) -> MemberType {
 }
 
 impl Member {
-    pub fn name(&self, parser: &Dwarf) -> Result<Option<String>, Error> {
-        parser.entry_context(&self.memb_loc, |entry| -> Option<String> {
+    pub fn name(&self, dwarf: &Dwarf) -> Result<Option<String>, Error> {
+        dwarf.entry_context(&self.memb_loc, |entry| -> Option<String> {
             let mut attrs = entry.attrs();
             while let Ok(Some(attr)) = &attrs.next() {
                 if attr.name() == gimli::DW_AT_name {
@@ -375,7 +506,7 @@ impl Member {
                             }
                         }
                         gimli::AttributeValue::DebugStrRef(strref) => {
-                            return from_dbg_str_ref(parser, strref)
+                            return from_dbg_str_ref(dwarf, strref)
                         }
                         _ => { }
                     };
@@ -385,9 +516,9 @@ impl Member {
         })
     }
 
-    pub fn get_bit_size(&self, parser: &Dwarf)
+    pub fn get_bit_size(&self, dwarf: &Dwarf)
     -> Result<Option<usize>, Error> {
-        parser.entry_context(&self.memb_loc, |entry| {
+        dwarf.entry_context(&self.memb_loc, |entry| {
             let mut attrs = entry.attrs();
             let mut bitsz: Option<usize> = None;
             while let Ok(Some(attr)) = &attrs.next() {
@@ -403,16 +534,16 @@ impl Member {
     }
 
     // retrieve the type belonging to a member
-    pub fn get_type(&self, parser: &Dwarf) -> Result<MemberType, Error> {
-        parser.entry_context(&self.type_loc, |entry| {
+    pub fn get_type(&self, dwarf: &Dwarf) -> Result<MemberType, Error> {
+        dwarf.entry_context(&self.type_loc, |entry| {
                 return entry_to_type(self.type_loc, entry)
         })
     }
 }
 
 impl Struct {
-    pub fn members(&self, parser: &Dwarf) -> Vec<Member> {
-        let members = parser.unit_context(&self.location.clone(), |unit| {
+    pub fn members(&self, dwarf: &Dwarf) -> Vec<Member> {
+        let members = dwarf.unit_context(&self.location.clone(), |unit| {
             let mut members: Vec<Member> = vec![];
             let mut entries = {
                 match unit.entries_at_offset(self.location.offset) {
@@ -452,9 +583,9 @@ impl Struct {
 }
 
 impl Variable {
-    pub fn get_type(&self, parser: &Dwarf)
+    pub fn get_type(&self, dwarf: &Dwarf)
     -> Result<Option<MemberType>, Error> {
-        parser.entry_context(&self.location.clone(), |entry|
+        dwarf.entry_context(&self.location.clone(), |entry|
          -> Result<Option<MemberType>, Error> {
             let mut attrs = entry.attrs();
             while let Ok(Some(attr)) = attrs.next() {
@@ -464,7 +595,7 @@ impl Variable {
                             header: self.location.header,
                             offset,
                         };
-                        return parser.entry_context(&type_loc, |entry| {
+                        return dwarf.entry_context(&type_loc, |entry| {
                             return Ok(Some(entry_to_type(type_loc, entry)));
                         })?
                     }
@@ -476,8 +607,8 @@ impl Variable {
 }
 
 impl Union {
-    pub fn members(&self, parser: &Dwarf) -> Vec<Member> {
-        let members = parser.unit_context(&self.location.clone(), |unit| {
+    pub fn members(&self, dwarf: &Dwarf) -> Vec<Member> {
+        let members = dwarf.unit_context(&self.location.clone(), |unit| {
             let mut members: Vec<Member> = vec![];
             let mut entries = {
                 match unit.entries_at_offset(self.location.offset) {
@@ -517,9 +648,9 @@ impl Union {
 }
 
 impl Pointer {
-    pub fn deref(&self, parser: &Dwarf)
+    pub fn deref(&self, dwarf: &Dwarf)
     -> Result<Option<MemberType>, Error> {
-        parser.entry_context(&self.location.clone(), |entry|
+        dwarf.entry_context(&self.location.clone(), |entry|
          -> Result<Option<MemberType>, Error> {
             let mut attrs = entry.attrs();
             while let Ok(Some(attr)) = attrs.next() {
@@ -529,7 +660,7 @@ impl Pointer {
                             header: self.location.header,
                             offset,
                         };
-                        return parser.entry_context(&type_loc, |entry| {
+                        return dwarf.entry_context(&type_loc, |entry| {
                             return Ok(Some(entry_to_type(type_loc, entry)));
                         })?
                     }
@@ -541,9 +672,9 @@ impl Pointer {
 }
 
 impl Array {
-    pub fn get_type(&self, parser: &Dwarf)
+    pub fn get_type(&self, dwarf: &Dwarf)
     -> Result<Option<MemberType>, Error> {
-        parser.entry_context(&self.location.clone(), |entry|
+        dwarf.entry_context(&self.location.clone(), |entry|
          -> Result<Option<MemberType>, Error> {
             let mut attrs = entry.attrs();
             while let Ok(Some(attr)) = attrs.next() {
@@ -553,7 +684,7 @@ impl Array {
                             header: self.location.header,
                             offset,
                         };
-                        return parser.entry_context(&type_loc, |entry| {
+                        return dwarf.entry_context(&type_loc, |entry| {
                             return Ok(Some(entry_to_type(type_loc, entry)));
                         })?
                     }
@@ -563,8 +694,8 @@ impl Array {
         })?
     }
 
-    pub fn get_bound(&self, parser: &Dwarf) -> Result<usize, Error> {
-        parser.unit_context(&self.location.clone(), |unit| {
+    pub fn get_bound(&self, dwarf: &Dwarf) -> Result<usize, Error> {
+        dwarf.unit_context(&self.location.clone(), |unit| {
             let bound = 0;
             let mut entries = {
                 match unit.entries_at_offset(self.location.offset) {
@@ -633,7 +764,7 @@ impl<'a> Dwarf<'a> {
         self.dwarf_cow.borrow(borrow_section)
     }
 
-    pub fn entry_context<F,R>(&self, loc: &Location, f: F) -> Result<R, Error>
+    fn entry_context<F,R>(&self, loc: &Location, f: F) -> Result<R, Error>
     where F: FnOnce(&DIE) -> R {
         let res = self.unit_context(loc, |unit| -> Result<R, Error> {
             let entry = match unit.entry(loc.offset) {
@@ -651,7 +782,7 @@ impl<'a> Dwarf<'a> {
         res
     }
 
-    pub fn unit_context<F,R>(&self, loc: &Location, f: F) -> Result<R, Error>
+    fn unit_context<F,R>(&self, loc: &Location, f: F) -> Result<R, Error>
     where F: FnOnce(&CU) -> R {
         let dwarf = self.borrow_dwarf();
         let mut unit_headers = dwarf.units();
@@ -671,8 +802,8 @@ impl<'a> Dwarf<'a> {
         Ok(f(&unit))
     }
 
-    /// lookup struct by name
-    pub fn lookup_struct(&mut self, name: String) -> Result<Option<Struct>, Error> {
+    pub fn lookup_item<T: Tagged>(&mut self, name: String)
+    -> Result<Option<T>, Error> {
         let dwarf = self.borrow_dwarf();
         let mut header_idx = 0;
         let mut unit_headers = dwarf.units();
@@ -684,7 +815,7 @@ impl<'a> Dwarf<'a> {
             let mut entries = unit.entries();
             'entries:
             while let Ok(Some((_delta_depth, entry))) = entries.next_dfs() {
-                if entry.tag() != gimli::DW_TAG_structure_type {
+                if entry.tag() != T::tag() {
                     continue;
                 }
 
@@ -703,9 +834,7 @@ impl<'a> Dwarf<'a> {
                         header: header_idx,
                         offset: entry.offset(),
                     };
-                    let typ = Struct {
-                        location,
-                    };
+                    let typ = T::new(location);
                     return Ok(Some(typ));
                 }
             }
@@ -714,11 +843,11 @@ impl<'a> Dwarf<'a> {
         Ok(None)
     }
 
-    pub fn get_named_structs(&self)
-    -> Result<BTreeMap<String, Struct>, Error> {
+    pub fn get_named_items_map<T: Tagged>(&self)
+    -> Result<BTreeMap<String, T>, Error> {
         let dwarf = self.borrow_dwarf();
         let mut header_idx = 0;
-        let mut struct_locations: BTreeMap<String, Struct> = BTreeMap::new();
+        let mut struct_locations: BTreeMap<String, T> = BTreeMap::new();
         let mut unit_headers = dwarf.units();
         while let Ok(Some(header)) = unit_headers.next() {
             let unit = match dwarf.unit(header) {
@@ -728,7 +857,7 @@ impl<'a> Dwarf<'a> {
             let mut entries = unit.entries();
             'entries:
             while let Ok(Some((_delta_depth, entry))) = entries.next_dfs() {
-                if entry.tag() != gimli::DW_TAG_structure_type {
+                if entry.tag() != T::tag() {
                     continue;
                 }
 
@@ -744,9 +873,7 @@ impl<'a> Dwarf<'a> {
                         header: header_idx,
                         offset: entry.offset(),
                     };
-                    let typ = Struct {
-                        location,
-                    };
+                    let typ = T::new(location);
                     struct_locations.insert(name, typ);
                 }
             }
@@ -755,11 +882,11 @@ impl<'a> Dwarf<'a> {
         Ok(struct_locations)
     }
 
-    pub fn get_named_variables(&self)
-    -> Result<Vec<(String, Variable)>, Error> {
+    pub fn get_named_items<T: Tagged>(&self)
+    -> Result<Vec<(String, T)>, Error> {
         let dwarf = self.borrow_dwarf();
         let mut header_idx = 0;
-        let mut variable_locations = Vec::<(String, Variable)>::new();
+        let mut items = Vec::<(String, T)>::new();
         let mut unit_headers = dwarf.units();
         while let Ok(Some(header)) = unit_headers.next() {
             let unit = match dwarf.unit(header) {
@@ -769,7 +896,7 @@ impl<'a> Dwarf<'a> {
             let mut entries = unit.entries();
             'entries:
             while let Ok(Some((_delta_depth, entry))) = entries.next_dfs() {
-                if entry.tag() != gimli::DW_TAG_variable {
+                if entry.tag() != T::tag() {
                     continue;
                 }
 
@@ -785,14 +912,12 @@ impl<'a> Dwarf<'a> {
                         header: header_idx,
                         offset: entry.offset(),
                     };
-                    let typ = Variable {
-                        location,
-                    };
-                    variable_locations.push((name, typ));
+                    let typ = T::new(location);
+                    items.push((name, typ));
                 }
             }
             header_idx += 1;
         }
-        Ok(variable_locations)
+        Ok(items)
     }
 }

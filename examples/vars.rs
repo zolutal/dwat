@@ -5,13 +5,13 @@ use std::fs::File;
 use memmap2::Mmap;
 
 fn main() -> anyhow::Result<()> {
-    let path = "/home/jmill/kernel-junk/kernel-dbg/vmlinux";
+    let path = "/home/jmiller/kernel-poc/vmlinux";
     let file = File::open(path).unwrap();
     let mmap = unsafe { Mmap::map(&file) }?;
 
     let dwarf = Dwarf::parse(&*mmap)?;
 
-    let vars: Vec<(String, dwat::Variable)> = dwarf.get_named_variables()?;
+    let vars = dwarf.get_named_items::<dwat::Variable>()?;
 
     for (name, var) in vars.into_iter() {
         let typ = var.get_type(&dwarf)?;

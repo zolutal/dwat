@@ -1,4 +1,3 @@
-use std::collections::BTreeMap;
 use std::fs::File;
 use memmap2::Mmap;
 
@@ -15,7 +14,7 @@ fn main() -> anyhow::Result<()> {
     let mmap = unsafe { Mmap::map(&file) }?;
 
     let dwarf = Dwarf::parse(&*mmap)?;
-    let struct_map: BTreeMap<String, dwat::Struct> = dwarf.get_named_structs()?;
+    let struct_map = dwarf.get_named_items_map::<dwat::Struct>()?;
 
     for (name, dwstruct) in struct_map.into_iter() {
         let members = dwstruct.members(&dwarf);

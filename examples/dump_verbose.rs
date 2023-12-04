@@ -15,7 +15,7 @@ fn main() -> anyhow::Result<()> {
     let mmap = unsafe { Mmap::map(&file) }?;
     let dwarf = Dwarf::parse(&*mmap)?;
 
-    let struct_map = dwarf.get_named_structs()?;
+    let struct_map = dwarf.get_named_items_map::<dwat::Struct>()?;
 
     for (_, dwstruct) in struct_map.into_iter() {
         print_struct(&dwarf, dwstruct)?;

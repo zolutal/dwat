@@ -1,6 +1,6 @@
 # dwat
 
-A fairly performant library intended to make DWARF (v4/v5) debugging information more accessible. 
+A fairly performant library intended to make DWARF (v4/v5) debugging information more accessible.
 
 My focus so far has been on making the type information (specifically structs) present in DWARF info easier to work with, so functionality related to that is largely what is implemented at this point.
 
@@ -35,7 +35,7 @@ The first step of using the library is to load the file containing DWARF info in
 You can then, for example, use the `lookup_struct` function on the Dwarf object to get an object representing a struct in the dwarf information with the specified name:
 
 ```rust
-    let found = dwarf.lookup_struct(struct_name.to_string())?;
+    let found = dwarf.lookup_item<dwat::Struct>(struct_name)?;
 ```
 
 A struct object can be printed as a C style definition by invoking the `dwat::format::print_struct` function:
