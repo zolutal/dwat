@@ -38,7 +38,7 @@ You can then, for example, use the `lookup_struct` function on the Dwarf object 
     let found = dwarf.lookup_struct(struct_name.to_string())?;
 ```
 
-A struct object can be printed as a C style definition by inoking the `dwat::format::print_struct` function:
+A struct object can be printed as a C style definition by invoking the `dwat::format::print_struct` function:
 
 ```rust
     if let Some(found) = found {
