@@ -5,10 +5,14 @@ use std::fs::File;
 use memmap2::Mmap;
 
 fn main() -> anyhow::Result<()> {
-    let path = "/home/jmiller/kernel-poc/vmlinux";
+    let mut args = std::env::args().skip(1);
+    let path = args.next().unwrap_or_else(|| {
+        eprintln!("Usage: vars <path>");
+        std::process::exit(1);
+    });
+
     let file = File::open(path).unwrap();
     let mmap = unsafe { Mmap::map(&file) }?;
-
     let dwarf = Dwarf::parse(&*mmap)?;
 
     let vars = dwarf.get_named_items::<dwat::Variable>()?;
