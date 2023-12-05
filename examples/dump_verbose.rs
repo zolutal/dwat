@@ -1,8 +1,7 @@
-use dwat::format::print_struct;
+use memmap2::Mmap;
+use std::fs::File;
 use dwat::Dwarf;
 
-use std::fs::File;
-use memmap2::Mmap;
 
 fn main() -> anyhow::Result<()> {
     let mut args = std::env::args().skip(1);
@@ -17,8 +16,8 @@ fn main() -> anyhow::Result<()> {
 
     let struct_map = dwarf.get_named_items_map::<dwat::Struct>()?;
 
-    for (_, dwstruct) in struct_map.into_iter() {
-        print_struct(&dwarf, dwstruct)?;
+    for (_, struc) in struct_map.into_iter() {
+        println!("{}", struc.to_string(&dwarf)?);
     }
 
     Ok(())

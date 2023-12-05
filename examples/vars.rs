@@ -1,5 +1,3 @@
-/// Example of doing variable analysis to find those which
-/// have types that are pointer arrays
 use dwat::Dwarf;
 use std::fs::File;
 use memmap2::Mmap;
@@ -17,12 +15,12 @@ fn main() -> anyhow::Result<()> {
 
     let vars = dwarf.get_named_items::<dwat::Variable>()?;
 
+    // find all variables that are of type union
+    // then print the union
     for (name, var) in vars.into_iter() {
         let typ = var.get_type(&dwarf)?;
-        if let Some(dwat::MemberType::Array(a)) = typ {
-            if let Some(dwat::MemberType::Pointer(_p)) = a.get_type(&dwarf)? {
-                println!("{}", name);
-            }
+        if let Some(dwat::MemberType::Union(u)) = typ {
+            println!("{} : {}", name, u.to_string(&dwarf)?)
         }
     };
 

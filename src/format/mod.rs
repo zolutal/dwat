@@ -1,6 +1,5 @@
 use crate::prelude::*;
 use crate::MemberType;
-use crate::Struct;
 use crate::Member;
 use crate::Dwarf;
 
@@ -11,7 +10,6 @@ pub fn format_type(dwarf: &Dwarf, member_name: String, typ: MemberType,
     let mut out = String::new();
     match typ {
         MemberType::Array(a) => {
-
             if let Some(inner) = a.get_type(dwarf)? {
                 let inner_fmt = format_type(dwarf, "".to_string(), inner,
                                             level+1, tablevel)?;
@@ -224,15 +222,4 @@ pub fn format_member(dwarf: &Dwarf, member: Member, tablevel: usize)
     }
     formatted.push_str(&format!(";\n"));
     Ok(formatted)
-}
-
-pub fn print_struct(dwarf: &Dwarf, struc: Struct)
--> Result<(), Error> {
-    println!("struct {} {{", struc.name(&dwarf).unwrap());
-    let members = struc.members(&dwarf);
-    for member in members.into_iter() {
-        print!("{}", format_member(dwarf, member, 0)?);
-    }
-    println!("}};");
-    Ok(())
 }

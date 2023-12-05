@@ -4,6 +4,8 @@ use fallible_iterator::FallibleIterator;
 use gimli::{RunTimeEndian, DebugStrOffset};
 use gimli::AttributeValue;
 
+use crate::format::format_member;
+
 pub mod format;
 
 pub mod prelude {
@@ -403,6 +405,14 @@ pub trait TypeModifier {
     }
 }
 
+// not quite accurate to call it a modifier, but it does have one
+// inner type, so the trait kind of fits
+impl TypeModifier for Array {
+    fn location(&self) -> Location {
+        self.location
+    }
+}
+
 impl TypeModifier for Const {
     fn location(&self) -> Location {
         self.location
@@ -580,6 +590,21 @@ impl Struct {
         });
         members.unwrap()
     }
+
+    pub fn to_string(&self, dwarf: &Dwarf) -> Result<String, Error> {
+        let mut repr = String::new();
+        if let Some(name) =  self.name(&dwarf) {
+            repr.push_str(&format!("struct {} {{", name));
+        } else {
+            repr.push_str(&"struct {{");
+        }
+        let members = self.members(&dwarf);
+        for member in members.into_iter() {
+            repr.push_str(&format!("{}", format_member(dwarf, member, 0)?));
+        }
+        repr.push_str(&format!("}};"));
+        Ok(repr)
+    }
 }
 
 impl Variable {
@@ -645,6 +670,21 @@ impl Union {
         });
         members.unwrap()
     }
+
+    pub fn to_string(&self, dwarf: &Dwarf) -> Result<String, Error> {
+        let mut repr = String::new();
+        if let Some(name) =  self.name(&dwarf) {
+            repr.push_str(&format!("union {} {{\n", name));
+        } else {
+            repr.push_str(&"union {\n");
+        }
+        let members = self.members(&dwarf);
+        for member in members.into_iter() {
+            repr.push_str(&format!("{}", format_member(dwarf, member, 0)?));
+        }
+        repr.push_str(&format!("}};"));
+        Ok(repr)
+    }
 }
 
 impl Pointer {
@@ -672,28 +712,6 @@ impl Pointer {
 }
 
 impl Array {
-    pub fn get_type(&self, dwarf: &Dwarf)
-    -> Result<Option<MemberType>, Error> {
-        dwarf.entry_context(&self.location.clone(), |entry|
-         -> Result<Option<MemberType>, Error> {
-            let mut attrs = entry.attrs();
-            while let Ok(Some(attr)) = attrs.next() {
-                if attr.name() == gimli::DW_AT_type {
-                    if let AttributeValue::UnitRef(offset) = attr.value() {
-                        let type_loc = Location {
-                            header: self.location.header,
-                            offset,
-                        };
-                        return dwarf.entry_context(&type_loc, |entry| {
-                            return Ok(Some(entry_to_type(type_loc, entry)));
-                        })?
-                    }
-                };
-            };
-            Ok(None)
-        })?
-    }
-
     pub fn get_bound(&self, dwarf: &Dwarf) -> Result<usize, Error> {
         dwarf.unit_context(&self.location.clone(), |unit| {
             let bound = 0;

@@ -1,4 +1,3 @@
-use dwat::format::print_struct;
 use dwat::Dwarf;
 use std::fs::File;
 use memmap2::Mmap;
@@ -28,7 +27,7 @@ fn main() -> anyhow::Result<()> {
 
     let found = dwarf.lookup_item::<dwat::Struct>(struct_name)?;
     if let Some(found) = found {
-        print_struct(&dwarf, found)?;
+        println!("{}", found.to_string(&dwarf)?);
     }
 
     Ok(())

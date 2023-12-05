@@ -5,9 +5,9 @@ A fairly performant library intended to make DWARF (v4/v5) debugging information
 My focus so far has been on making the type information (specifically structs) present in DWARF info easier to work with, so functionality related to that is largely what is implemented at this point.
 
 **Current Features**:
-- Get a dictionary of all structs
-- Get a list of all variables
-- Basic formating of parsed struct information to C style struct definitions
+- Get a list of types by name
+- Get a map of types by name
+- Recursive formating of parsed struct, union information to C style struct definitions
 
 **TODO**:
 - test array lengths more thoroughly
@@ -39,11 +39,11 @@ The dwarf object has a `lookup_item` method that can be used to lookup any type 
     let found = dwarf.lookup_item::<dwat::Struct>(struct_name)?;
 ```
 
-A struct object can be printed as a C style definition by invoking the `dwat::format::print_struct` function:
+A struct object can be converted to a C style definition String by invoking the `to_string` function:
 
 ```rust
     if let Some(found) = found {
-        print_struct(&dwarf, found)?;
+        println!("{}", found.to_string(&dwarf)?);
     }
 ```
 
