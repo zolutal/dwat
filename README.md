@@ -36,7 +36,7 @@ The first step of using the library is to load the file containing DWARF info in
 The dwarf object has a `lookup_item` method that can be used to lookup any type implementing the `Tagged` trait by name, in this case a struct will be searched for:
 
 ```rust
-    let found = dwarf.lookup_item<dwat::Struct>(struct_name)?;
+    let found = dwarf.lookup_item::<dwat::Struct>(struct_name)?;
 ```
 
 A struct object can be printed as a C style definition by invoking the `dwat::format::print_struct` function:
