@@ -7,7 +7,7 @@ My focus so far has been on making the type information (specifically structs) p
 **Current Features**:
 - Get a list of types by name
 - Get a map of types by name
-- Recursive formating of parsed struct, union information to C style struct definitions
+- Recursive formating of parsed struct, union information to C style definitions
 
 **TODO**:
 - test array lengths more thoroughly
@@ -47,7 +47,7 @@ A struct object can be converted to a C style definition String by invoking the 
     }
 ```
 
-This is the result for the `ntb_ctrl_regs` struct found in the Linux kernel:
+This is the result for the `ntb_ctrl_regs` struct found in the Linux kernel which is formatted well despite its moderate complexity:
 
 ```
 ┌──(zolutal@ubuntu)-[~/repos/dwat]
