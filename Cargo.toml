@@ -18,3 +18,7 @@ anyhow = "1.0.75"
 default = ["std-object", "fallible-iterator", "smallvec"]
 std = ["gimli/std"]
 std-object = ["std", "object", "object/std", "object/compression", "gimli/endian-reader"]
+
+[profile.release]
+codegen-units = 1
+lto = "fat"

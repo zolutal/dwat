@@ -10,7 +10,8 @@ pub mod format;
 
 pub mod prelude {
     pub use super::NamedType;
-    pub use super::TypeModifier;
+    pub use super::InnerType;
+    pub use super::HasMembers;
 }
 
 // Abbreviations for some lengthy gimli types
@@ -111,7 +112,7 @@ pub struct Variable {
 /// A member is a field of a struct that has an unknown type
 /// members are found via a DW_TAG_member, they represent an intermediate state
 /// where we can know the location of the member type but haven't parsed it yet
-/// TODO: Maybe this should be standardized, e.g.: don't hold type_loc
+// TODO: Maybe this should be standardized, e.g.: don't hold type_loc
 #[derive(Clone, Copy, Debug)]
 pub struct Member {
     pub memb_loc: Location,
@@ -133,7 +134,7 @@ pub enum MemberType {
     Subrange(Subrange),
 }
 
-/// Try to retrieve a string from the debug_str section for a given offset
+// Try to retrieve a string from the debug_str section for a given offset
 fn from_dbg_str_ref(dwarf: &Dwarf, str_ref: DebugStrOffset<usize>)
 -> Option<String> {
     let dwarf = dwarf.borrow_dwarf();
@@ -144,7 +145,7 @@ fn from_dbg_str_ref(dwarf: &Dwarf, str_ref: DebugStrOffset<usize>)
     None
 }
 
-/// Try to retrieve the name attribute as a string for a DIE if one exists
+// Try to retrieve the name attribute as a string for a DIE if one exists
 fn get_entry_name(dwarf: &Dwarf, entry: &DIE) -> Option<String> {
     let mut attrs = entry.attrs();
     while let Ok(Some(attr)) = &attrs.next() {
@@ -181,205 +182,65 @@ pub trait NamedType {
     }
 }
 
-impl NamedType for Struct {
-    fn location(&self) -> Location {
-        self.location
-    }
+macro_rules! impl_named_type {
+    ($type:ty) => {
+        impl NamedType for $type {
+            fn location(&self) -> Location {
+                self.location
+            }
+        }
+    };
 }
 
-impl NamedType for Array {
-    fn location(&self) -> Location {
-        self.location
-    }
-}
+impl_named_type!(Struct);
+impl_named_type!(Array);
+impl_named_type!(Enum);
+impl_named_type!(Subroutine);
+impl_named_type!(Typedef);
+impl_named_type!(Union);
+impl_named_type!(Base);
+impl_named_type!(Const);
+impl_named_type!(Volatile);
+impl_named_type!(Subrange);
+impl_named_type!(Variable);
 
-impl NamedType for Enum {
-    fn location(&self) -> Location {
-        self.location
-    }
-}
 
-impl NamedType for Pointer {
-    fn location(&self) -> Location {
-        self.location
-    }
-}
-
-impl NamedType for Subroutine {
-    fn location(&self) -> Location {
-        self.location
-    }
-}
-
-impl NamedType for Typedef {
-    fn location(&self) -> Location {
-        self.location
-    }
-}
-
-impl NamedType for Union {
-    fn location(&self) -> Location {
-        self.location
-    }
-}
-
-impl NamedType for Base {
-    fn location(&self) -> Location {
-        self.location
-    }
-}
-
-impl NamedType for Const {
-    fn location(&self) -> Location {
-        self.location
-    }
-}
-
-impl NamedType for Volatile {
-    fn location(&self) -> Location {
-        self.location
-    }
-}
-
-impl NamedType for Subrange {
-    fn location(&self) -> Location {
-        self.location
-    }
-}
-
-impl NamedType for Variable {
-    fn location(&self) -> Location {
-        self.location
-    }
-}
-
+/// This trait specifies that a type is associated with some DWARF tag
 pub trait Tagged {
     fn new(location: Location) -> Self;
     fn tag() -> gimli::DwTag;
 }
 
-impl Tagged for Struct {
-    fn new(location: Location) -> Self {
-        Self { location }
-    }
+macro_rules! impl_tagged_type {
+    ($type:ty, $tag:expr) => {
+        impl Tagged for $type {
+            fn new(location: Location) -> Self {
+                Self { location }
+            }
 
-    fn tag() -> gimli::DwTag {
-        gimli::DW_TAG_structure_type
-    }
+            fn tag() -> gimli::DwTag {
+                $tag
+            }
+        }
+    };
 }
 
-impl Tagged for Array {
-    fn new(location: Location) -> Self {
-        Self { location }
-    }
+impl_tagged_type!(Struct, gimli::DW_TAG_structure_type);
+impl_tagged_type!(Array, gimli::DW_TAG_array_type);
+impl_tagged_type!(Enum, gimli::DW_TAG_enumeration_type);
+impl_tagged_type!(Pointer, gimli::DW_TAG_pointer_type);
+impl_tagged_type!(Subroutine, gimli::DW_TAG_subroutine_type);
+impl_tagged_type!(Typedef, gimli::DW_TAG_typedef);
+impl_tagged_type!(Union, gimli::DW_TAG_union_type);
+impl_tagged_type!(Base, gimli::DW_TAG_base_type);
+impl_tagged_type!(Const, gimli::DW_TAG_const_type);
+impl_tagged_type!(Volatile, gimli::DW_TAG_volatile_type);
+impl_tagged_type!(Subrange, gimli::DW_TAG_subrange_type);
+impl_tagged_type!(Variable, gimli::DW_TAG_variable);
 
-    fn tag() -> gimli::DwTag {
-        gimli::DW_TAG_array_type
-    }
-}
 
-impl Tagged for Enum {
-    fn new(location: Location) -> Self {
-        Self { location }
-    }
-
-    fn tag() -> gimli::DwTag {
-        gimli::DW_TAG_enumeration_type
-    }
-}
-
-impl Tagged for Pointer {
-    fn new(location: Location) -> Self {
-        Self { location }
-    }
-
-    fn tag() -> gimli::DwTag {
-        gimli::DW_TAG_pointer_type
-    }
-}
-
-impl Tagged for Subroutine {
-    fn new(location: Location) -> Self {
-        Self { location }
-    }
-
-    fn tag() -> gimli::DwTag {
-        gimli::DW_TAG_subroutine_type
-    }
-}
-
-impl Tagged for Typedef {
-    fn new(location: Location) -> Self {
-        Self { location }
-    }
-
-    fn tag() -> gimli::DwTag {
-        gimli::DW_TAG_typedef
-    }
-}
-
-impl Tagged for Union {
-    fn new(location: Location) -> Self {
-        Self { location }
-    }
-
-    fn tag() -> gimli::DwTag {
-        gimli::DW_TAG_union_type
-    }
-}
-
-impl Tagged for Base {
-    fn new(location: Location) -> Self {
-        Self { location }
-    }
-
-    fn tag() -> gimli::DwTag {
-        gimli::DW_TAG_base_type
-    }
-}
-
-impl Tagged for Const {
-    fn new(location: Location) -> Self {
-        Self { location }
-    }
-
-    fn tag() -> gimli::DwTag {
-        gimli::DW_TAG_const_type
-    }
-}
-
-impl Tagged for Volatile {
-    fn new(location: Location) -> Self {
-        Self { location }
-    }
-
-    fn tag() -> gimli::DwTag {
-        gimli::DW_TAG_volatile_type
-    }
-}
-
-impl Tagged for Subrange {
-    fn new(location: Location) -> Self {
-        Self { location }
-    }
-
-    fn tag() -> gimli::DwTag {
-        gimli::DW_TAG_subrange_type
-    }
-}
-
-impl Tagged for Variable {
-    fn new(location: Location) -> Self {
-        Self { location }
-    }
-
-    fn tag() -> gimli::DwTag {
-        gimli::DW_TAG_variable
-    }
-}
-
-// Types which contain another type
-pub trait TypeModifier {
+/// This trait specifies that a types contains another type (singular)
+pub trait InnerType {
     fn location(&self) -> Location;
 
     fn get_type(&self, dwarf: &Dwarf)
@@ -405,31 +266,24 @@ pub trait TypeModifier {
     }
 }
 
-// not quite accurate to call it a modifier, but it does have one
-// inner type, so the trait kind of fits
-impl TypeModifier for Array {
-    fn location(&self) -> Location {
-        self.location
-    }
+macro_rules! impl_inner_type {
+    ($type:ty) => {
+        impl InnerType for $type {
+            fn location(&self) -> Location {
+                self.location
+            }
+        }
+    };
 }
 
-impl TypeModifier for Const {
-    fn location(&self) -> Location {
-        self.location
-    }
-}
+impl_inner_type!(Const);
+impl_inner_type!(Volatile);
+impl_inner_type!(FormalParameter);
+impl_inner_type!(Subroutine);
+impl_inner_type!(Pointer);
+impl_inner_type!(Array);
+impl_inner_type!(Variable);
 
-impl TypeModifier for Volatile {
-    fn location(&self) -> Location {
-        self.location
-    }
-}
-
-impl TypeModifier for FormalParameter {
-    fn location(&self) -> Location {
-        self.location
-    }
-}
 
 impl Subroutine {
     pub fn get_params(&self, dwarf: &Dwarf)
@@ -551,12 +405,14 @@ impl Member {
     }
 }
 
-impl Struct {
-    pub fn members(&self, dwarf: &Dwarf) -> Vec<Member> {
-        let members = dwarf.unit_context(&self.location.clone(), |unit| {
+pub trait HasMembers {
+    fn location(&self) -> Location;
+
+    fn members(&self, dwarf: &Dwarf) -> Vec<Member> {
+        let members = dwarf.unit_context(&self.location().clone(), |unit| {
             let mut members: Vec<Member> = vec![];
             let mut entries = {
-                match unit.entries_at_offset(self.location.offset) {
+                match unit.entries_at_offset(self.location().offset) {
                     Ok(entries) => entries,
                     _ => return members,
                 }
@@ -569,7 +425,7 @@ impl Struct {
                     break;
                 }
                 let memb_loc = Location {
-                    header: self.location.header,
+                    header: self.location().header,
                     offset: entry.offset(),
                 };
                 let mut attrs = entry.attrs();
@@ -577,7 +433,7 @@ impl Struct {
                     if attr.name() == gimli::DW_AT_type {
                         if let AttributeValue::UnitRef(offset) = attr.value() {
                             let type_loc = Location {
-                                header: self.location.header,
+                                header: self.location().header,
                                 offset,
                             };
                             members.push(Member { type_loc, memb_loc });
@@ -590,13 +446,27 @@ impl Struct {
         });
         members.unwrap()
     }
+}
 
+impl HasMembers for Struct {
+    fn location(&self) -> Location {
+        self.location
+    }
+}
+
+impl HasMembers for Union {
+    fn location(&self) -> Location {
+        self.location
+    }
+}
+
+impl Struct {
     pub fn to_string(&self, dwarf: &Dwarf) -> Result<String, Error> {
         let mut repr = String::new();
         if let Some(name) =  self.name(&dwarf) {
-            repr.push_str(&format!("struct {} {{", name));
+            repr.push_str(&format!("struct {} {{\n", name));
         } else {
-            repr.push_str(&"struct {{");
+            repr.push_str(&"struct {{\n");
         }
         let members = self.members(&dwarf);
         for member in members.into_iter() {
@@ -607,70 +477,7 @@ impl Struct {
     }
 }
 
-impl Variable {
-    pub fn get_type(&self, dwarf: &Dwarf)
-    -> Result<Option<MemberType>, Error> {
-        dwarf.entry_context(&self.location.clone(), |entry|
-         -> Result<Option<MemberType>, Error> {
-            let mut attrs = entry.attrs();
-            while let Ok(Some(attr)) = attrs.next() {
-                if attr.name() == gimli::DW_AT_type {
-                    if let AttributeValue::UnitRef(offset) = attr.value() {
-                        let type_loc = Location {
-                            header: self.location.header,
-                            offset,
-                        };
-                        return dwarf.entry_context(&type_loc, |entry| {
-                            return Ok(Some(entry_to_type(type_loc, entry)));
-                        })?
-                    }
-                };
-            };
-            Ok(None)
-        })?
-    }
-}
-
 impl Union {
-    pub fn members(&self, dwarf: &Dwarf) -> Vec<Member> {
-        let members = dwarf.unit_context(&self.location.clone(), |unit| {
-            let mut members: Vec<Member> = vec![];
-            let mut entries = {
-                match unit.entries_at_offset(self.location.offset) {
-                    Ok(entries) => entries,
-                    _ => return members,
-                }
-            };
-            if entries.next_dfs().is_err() {
-                return members;
-            }
-            while let Ok(Some((_, entry))) = entries.next_dfs() {
-                if entry.tag() != gimli::DW_TAG_member {
-                    break;
-                }
-                let memb_loc = Location {
-                    header: self.location.header,
-                    offset: entry.offset(),
-                };
-                let mut attrs = entry.attrs();
-                while let Ok(Some(attr)) = attrs.next() {
-                    if attr.name() == gimli::DW_AT_type {
-                        if let AttributeValue::UnitRef(offset) = attr.value() {
-                            let type_loc = Location {
-                                header: self.location.header,
-                                offset,
-                            };
-                            members.push(Member { type_loc, memb_loc });
-                            break;
-                        }
-                    };
-                };
-            };
-            members
-        });
-        members.unwrap()
-    }
-
     pub fn to_string(&self, dwarf: &Dwarf) -> Result<String, Error> {
         let mut repr = String::new();
         if let Some(name) =  self.name(&dwarf) {
@@ -688,26 +495,10 @@ impl Union {
 }
 
 impl Pointer {
+    /// alias for get_type()
     pub fn deref(&self, dwarf: &Dwarf)
     -> Result<Option<MemberType>, Error> {
-        dwarf.entry_context(&self.location.clone(), |entry|
-         -> Result<Option<MemberType>, Error> {
-            let mut attrs = entry.attrs();
-            while let Ok(Some(attr)) = attrs.next() {
-                if attr.name() == gimli::DW_AT_type {
-                    if let AttributeValue::UnitRef(offset) = attr.value() {
-                        let type_loc = Location {
-                            header: self.location.header,
-                            offset,
-                        };
-                        return dwarf.entry_context(&type_loc, |entry| {
-                            return Ok(Some(entry_to_type(type_loc, entry)));
-                        })?
-                    }
-                };
-            };
-            Ok(None)
-        })?
+        self.get_type(dwarf)
     }
 }
 

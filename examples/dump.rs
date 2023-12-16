@@ -1,6 +1,7 @@
 use std::fs::File;
 use memmap2::Mmap;
 
+use dwat::prelude::*;
 use dwat::Dwarf;
 
 fn main() -> anyhow::Result<()> {

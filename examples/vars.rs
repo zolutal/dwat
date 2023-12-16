@@ -1,3 +1,6 @@
+/// Example of doing variable analysis to find those which
+/// have types that are pointer arrays
+use dwat::prelude::*;
 use dwat::Dwarf;
 use std::fs::File;
 use memmap2::Mmap;

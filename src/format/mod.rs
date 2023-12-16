@@ -14,9 +14,12 @@ pub fn format_type(dwarf: &Dwarf, member_name: String, typ: MemberType,
                 let inner_fmt = format_type(dwarf, "".to_string(), inner,
                                             level+1, tablevel)?;
                 out.push_str(&format!("{inner_fmt}"));
+                if !out.ends_with('*') {
+                    out.push(' ');
+                }
             }
             if level == 0 {
-                out.push_str(&format!(" {member_name}"));
+                out.push_str(&format!("{member_name}"));
             }
 
             let bound = a.get_bound(dwarf)?;
