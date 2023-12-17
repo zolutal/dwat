@@ -1,4 +1,4 @@
-use std::{collections::BTreeMap, borrow::Cow};
+use std::{collections::HashMap, borrow::Cow};
 use object::{Object, ObjectSection, ReadRef};
 use fallible_iterator::FallibleIterator;
 use gimli::{RunTimeEndian, DebugStrOffset};
@@ -151,8 +151,7 @@ pub trait NamedType {
     // member's location
     fn name(&self, dwarf: &Dwarf) -> Option<String> {
         dwarf.entry_context(&self.location(), |entry| {
-            let name = get_entry_name(dwarf, entry);
-            name
+            get_entry_name(dwarf, entry)
         }).unwrap()
     }
 }
@@ -231,7 +230,7 @@ pub trait InnerType {
                             offset,
                         };
                         return dwarf.entry_context(&type_loc, |entry| {
-                            return Ok(Some(entry_to_type(type_loc, entry)));
+                            Ok(Some(entry_to_type(type_loc, entry)))
                         })?
                     }
                 };
@@ -263,7 +262,7 @@ impl_inner_type!(Variable);
 impl Subroutine {
     pub fn get_params(&self, dwarf: &Dwarf)
     -> Result<Vec<FormalParameter>, Error> {
-        dwarf.unit_context(&self.location.clone(), |unit| {
+        dwarf.unit_context(&self.location, |unit| {
             let mut params: Vec<FormalParameter> = vec![];
             let mut entries = {
                 match unit.entries_at_offset(self.location.offset) {
@@ -289,40 +288,40 @@ impl Subroutine {
     }
 }
 
-fn entry_to_type (location: Location, entry: &DIE) -> MemberType {
+fn entry_to_type(location: Location, entry: &DIE) -> MemberType {
     match entry.tag() {
         gimli::DW_TAG_array_type => {
-            return MemberType::Array(Array{location});
+            MemberType::Array(Array{location})
         },
         gimli::DW_TAG_enumeration_type => {
-            return MemberType::Enum(Enum{location});
+            MemberType::Enum(Enum{location})
         },
         gimli::DW_TAG_pointer_type => {
-            return MemberType::Pointer(Pointer{location});
+            MemberType::Pointer(Pointer{location})
         },
         gimli::DW_TAG_structure_type => {
-            return MemberType::Struct(Struct{location});
+            MemberType::Struct(Struct{location})
         },
         gimli::DW_TAG_subroutine_type => {
-            return MemberType::Subroutine(Subroutine{location});
+            MemberType::Subroutine(Subroutine{location})
         },
         gimli::DW_TAG_typedef => {
-            return MemberType::Typedef(Typedef{location});
+            MemberType::Typedef(Typedef{location})
         },
         gimli::DW_TAG_union_type => {
-            return MemberType::Union(Union{location});
+            MemberType::Union(Union{location})
         },
         gimli::DW_TAG_base_type => {
-            return MemberType::Base(Base{location});
+            MemberType::Base(Base{location})
         },
         gimli::DW_TAG_const_type => {
-            return MemberType::Const(Const{location});
+            MemberType::Const(Const{location})
         },
         gimli::DW_TAG_volatile_type => {
-            return MemberType::Volatile(Volatile{location});
+            MemberType::Volatile(Volatile{location})
         },
         gimli::DW_TAG_subrange_type => {
-            return MemberType::Subrange(Subrange{location});
+            MemberType::Subrange(Subrange{location})
         },
         _ => {
             // TODO: return an error indicating unimplemented?
@@ -375,7 +374,7 @@ impl Member {
     // retrieve the type belonging to a member
     pub fn get_type(&self, dwarf: &Dwarf) -> Result<MemberType, Error> {
         dwarf.entry_context(&self.type_loc, |entry| {
-                return entry_to_type(self.type_loc, entry)
+            entry_to_type(self.type_loc, entry)
         })
     }
 }
@@ -384,7 +383,7 @@ pub trait HasMembers {
     fn location(&self) -> Location;
 
     fn members(&self, dwarf: &Dwarf) -> Vec<Member> {
-        let members = dwarf.unit_context(&self.location().clone(), |unit| {
+        let members = dwarf.unit_context(&self.location(), |unit| {
             let mut members: Vec<Member> = vec![];
             let mut entries = {
                 match unit.entries_at_offset(self.location().offset) {
@@ -438,16 +437,16 @@ impl HasMembers for Union {
 impl Struct {
     pub fn to_string(&self, dwarf: &Dwarf) -> Result<String, Error> {
         let mut repr = String::new();
-        if let Some(name) =  self.name(&dwarf) {
+        if let Some(name) =  self.name(dwarf) {
             repr.push_str(&format!("struct {} {{\n", name));
         } else {
-            repr.push_str(&"struct {{\n");
+            repr.push_str("struct {\n");
         }
-        let members = self.members(&dwarf);
+        let members = self.members(dwarf);
         for member in members.into_iter() {
-            repr.push_str(&format!("{}", format_member(dwarf, member, 0)?));
+            repr.push_str(&format_member(dwarf, member, 0)?);
         }
-        repr.push_str(&format!("}};"));
+        repr.push_str("};");
         Ok(repr)
     }
 }
@@ -455,16 +454,16 @@ impl Struct {
 impl Union {
     pub fn to_string(&self, dwarf: &Dwarf) -> Result<String, Error> {
         let mut repr = String::new();
-        if let Some(name) =  self.name(&dwarf) {
+        if let Some(name) =  self.name(dwarf) {
             repr.push_str(&format!("union {} {{\n", name));
         } else {
-            repr.push_str(&"union {\n");
+            repr.push_str("union {\n");
         }
-        let members = self.members(&dwarf);
+        let members = self.members(dwarf);
         for member in members.into_iter() {
-            repr.push_str(&format!("{}", format_member(dwarf, member, 0)?));
+            repr.push_str(&format_member(dwarf, member, 0)?);
         }
-        repr.push_str(&format!("}};"));
+        repr.push_str("};");
         Ok(repr)
     }
 }
@@ -479,7 +478,7 @@ impl Pointer {
 
 impl Array {
     pub fn get_bound(&self, dwarf: &Dwarf) -> Result<usize, Error> {
-        dwarf.unit_context(&self.location.clone(), |unit| {
+        dwarf.unit_context(&self.location, |unit| {
             let bound = 0;
             let mut entries = {
                 match unit.entries_at_offset(self.location.offset) {
@@ -511,7 +510,7 @@ impl Array {
 
 pub struct Dwarf<'a> {
     dwarf_cow: gimli::Dwarf<Cow<'a, [u8]>>,
-    endianness: RunTimeEndian,
+    endianness: RunTimeEndian
 }
 
 impl<'a> Dwarf<'a> {
@@ -550,7 +549,7 @@ impl<'a> Dwarf<'a> {
 
     fn entry_context<F,R>(&self, loc: &Location, f: F) -> Result<R, Error>
     where F: FnOnce(&DIE) -> R {
-        let res = self.unit_context(loc, |unit| -> Result<R, Error> {
+        self.unit_context(loc, |unit| -> Result<R, Error> {
             let entry = match unit.entry(loc.offset) {
                 Ok(entry) => entry,
                 Err(_) => {
@@ -562,8 +561,7 @@ impl<'a> Dwarf<'a> {
                 }
             };
             Ok(f(&entry))
-        })?;
-        res
+        })?
     }
 
     fn unit_context<F,R>(&self, loc: &Location, f: F) -> Result<R, Error>
@@ -628,10 +626,10 @@ impl<'a> Dwarf<'a> {
     }
 
     pub fn get_named_items_map<T: Tagged>(&self)
-    -> Result<BTreeMap<String, T>, Error> {
+    -> Result<HashMap<String, T>, Error> {
         let dwarf = self.borrow_dwarf();
         let mut header_idx = 0;
-        let mut struct_locations: BTreeMap<String, T> = BTreeMap::new();
+        let mut struct_locations: HashMap<String, T> = HashMap::new();
         let mut unit_headers = dwarf.units();
         while let Ok(Some(header)) = unit_headers.next() {
             let unit = match dwarf.unit(header) {

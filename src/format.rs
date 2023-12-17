@@ -13,13 +13,13 @@ pub fn format_type(dwarf: &Dwarf, member_name: String, typ: MemberType,
             if let Some(inner) = a.get_type(dwarf)? {
                 let inner_fmt = format_type(dwarf, "".to_string(), inner,
                                             level+1, tablevel)?;
-                out.push_str(&format!("{inner_fmt}"));
+                out.push_str(&inner_fmt);
                 if !out.ends_with('*') {
                     out.push(' ');
                 }
             }
             if level == 0 {
-                out.push_str(&format!("{member_name}"));
+                out.push_str(&member_name);
             }
 
             let bound = a.get_bound(dwarf)?;
@@ -41,7 +41,7 @@ pub fn format_type(dwarf: &Dwarf, member_name: String, typ: MemberType,
                     );
                     return Ok(out);
                 }
-                out.push_str(&format!("{name}"));
+                out.push_str(&name);
             }
         },
         MemberType::Struct(t) => {
@@ -63,11 +63,10 @@ pub fn format_type(dwarf: &Dwarf, member_name: String, typ: MemberType,
                 );
             }
 
-            let mut tabs = String::new();
             for _ in 0..=tablevel {
-                tabs.push('\t');
+                out.push('\t');
             }
-            out.push_str(&format!("{tabs}}}"));
+            out.push('}');
             return Ok(out);
         },
         MemberType::Enum(t) => {
@@ -100,11 +99,10 @@ pub fn format_type(dwarf: &Dwarf, member_name: String, typ: MemberType,
                     &format_member(dwarf, memb, tablevel+1)?);
             }
 
-            let mut tabs = String::new();
             for _ in 0..=tablevel {
-                tabs.push('\t');
+                out.push('\t');
             }
-            out.push_str(&format!("{tabs}}}"));
+            out.push('}');
             return Ok(out);
         },
         MemberType::Base(t) => {
@@ -113,7 +111,7 @@ pub fn format_type(dwarf: &Dwarf, member_name: String, typ: MemberType,
                     out.push_str(&format!("{name} {member_name}"));
                     return Ok(out);
                 }
-                out.push_str(&format!("{name}"));
+                out.push_str(&name);
             }
             return Ok(out);
         },
@@ -168,13 +166,13 @@ pub fn format_type(dwarf: &Dwarf, member_name: String, typ: MemberType,
             out.push_str(&ptr_type);
 
             if ptr_type.ends_with('*'){
-                out.push_str("*");
+                out.push('*');
             } else {
                 out.push_str(" *");
             }
 
             if level == 0 {
-                out.push_str(&format!("{member_name}"));
+                out.push_str(&member_name);
                 return Ok(out);
             }
             return Ok(out);
@@ -207,22 +205,23 @@ pub fn format_type(dwarf: &Dwarf, member_name: String, typ: MemberType,
 pub fn format_member(dwarf: &Dwarf, member: Member, tablevel: usize)
 -> Result<String, Error> {
     let mut name = String::new();
-    if let Some(n) = member.name(&dwarf)? {
+    if let Some(n) = member.name(dwarf)? {
         name = n;
     };
 
-    let mtype = member.get_type(&dwarf)?;
-    let mut formatted = format_type(dwarf, name, mtype, 0, tablevel)?;
+    let mtype = member.get_type(dwarf)?;
 
-    let mut tabs = String::new();
+    let mut formatted = String::new();
     for _ in 0..=tablevel {
-        tabs.push('\t');
+        formatted.push('\t');
     }
-    formatted = format!("{tabs}{formatted}");
+
+    formatted.push_str(&format_type(dwarf, name, mtype, 0, tablevel)?);
+
     let bitsz = member.get_bit_size(dwarf)?;
     if let Some(bitsz) = bitsz {
         formatted.push_str(&format!(":{bitsz}"));
     }
-    formatted.push_str(&format!(";\n"));
+    formatted.push_str(";\n");
     Ok(formatted)
 }

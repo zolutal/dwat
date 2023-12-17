@@ -1,5 +1,4 @@
-/// Example of doing variable analysis to find those which
-/// have types that are pointer arrays
+/// Example of doing variable analysis to all variables that are unions
 use dwat::prelude::*;
 use dwat::Dwarf;
 use std::fs::File;
