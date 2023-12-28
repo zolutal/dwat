@@ -13,6 +13,7 @@ object = { version = "0.30.0", default-features = false, features = ["read"], op
 smallvec = { version = "1", default-features = false, optional = true }
 thiserror = "1.0.50"
 anyhow = "1.0.75"
+tempfile = "3.8.1"
 
 [features]
 default = ["std-object", "fallible-iterator", "smallvec"]

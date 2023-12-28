@@ -6,9 +6,14 @@ use dwat::Dwarf;
 fn main() -> anyhow::Result<()> {
     let mut args = std::env::args().skip(1);
     let path = args.next().unwrap_or_else(|| {
-        eprintln!("Usage: dump_verbose <path>");
+        eprintln!("Usage: dump_verbose <path> [verbosity-level]");
         std::process::exit(1);
     });
+    let verbosity = args.next().unwrap_or_else(|| {
+        "0".to_string()
+    });
+
+    let verbosity = verbosity.parse::<u8>()?;
 
     let file = File::open(path)?;
     let mmap = unsafe { Mmap::map(&file) }?;
@@ -17,7 +22,7 @@ fn main() -> anyhow::Result<()> {
     let struct_map = dwarf.get_named_items_map::<dwat::Struct>()?;
 
     for (_, struc) in struct_map.into_iter() {
-        println!("{}", struc.to_string(&dwarf)?);
+        println!("{}", struc.to_string_verbose(&dwarf, verbosity)?);
     }
 
     Ok(())

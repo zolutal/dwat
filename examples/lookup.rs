@@ -5,13 +5,18 @@ use memmap2::Mmap;
 fn main() -> anyhow::Result<()> {
     let mut args = std::env::args().skip(1);
     let struct_name = args.next().unwrap_or_else(|| {
-        eprintln!("Usage: lookup <struct_name> <path>");
+        eprintln!("Usage: lookup <struct_name> <path> [verbosity]");
         std::process::exit(1);
     }).to_string();
     let path = args.next().unwrap_or_else(|| {
-        eprintln!("Usage: lookup <struct_name> <path>");
+        eprintln!("Usage: lookup <struct_name> <path> [verbosity]");
         std::process::exit(1);
     });
+    let verbosity = args.next().unwrap_or_else(|| {
+        "0".to_string()
+    });
+
+    let verbosity = verbosity.parse::<u8>()?;
 
     let file = File::open(path).unwrap();
     let mmap = unsafe { Mmap::map(&file) }.unwrap();
@@ -27,7 +32,7 @@ fn main() -> anyhow::Result<()> {
 
     let found = dwarf.lookup_item::<dwat::Struct>(struct_name)?;
     if let Some(found) = found {
-        println!("{}", found.to_string(&dwarf)?);
+        println!("{}", found.to_string_verbose(&dwarf, verbosity)?);
     }
 
     Ok(())
