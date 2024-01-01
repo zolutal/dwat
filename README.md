@@ -7,15 +7,11 @@ My focus so far has been on making the type information (specifically structs) p
 **Current Features**:
 - Get a list of types by name
 - Get a map of types by name
-- Recursive formating of parsed struct, union information to C style definitions
-
-**TODO**:
-- test array lengths more thoroughly
-- get return types of subprocedures
-- support printing more than just structs (some more generic formatting function?)
-- make size information on types accessible
-- many other things
-
+- Recursive formating of parsed struct and union information to C style definitions
+- Get members of structs/unions
+- Get underlying types of modifiers (volatile/const/etc...)
+- Get byte size information for types
+- Get bit sizes for bit field struct members
 
 # Examples
 
