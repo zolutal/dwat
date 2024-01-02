@@ -15,19 +15,16 @@ fn compile(source: &str) -> anyhow::Result<(TempDir, PathBuf)> {
         tmp_file.write_all(source.as_bytes())?;
     }
 
-    std::thread::sleep(std::time::Duration::from_secs(3));
-
     let out_path = tmp_dir.path().join("bin");
     let output = Command::new("gcc")
         .arg(&src_path)
-        .arg("-g")
+        .arg("-gdwarf-5") // TODO: Allow this to be configurable, env var maybe
         .arg("-o")
         .arg(&out_path)
         .output()?;
 
     if !output.status.success() {
-        eprintln!("gcc failed: {}", String::from_utf8_lossy(&output.stderr));
-        return Err(anyhow::anyhow!("Compilation failed"));
+        panic!("gcc failed: {}", String::from_utf8_lossy(&output.stderr));
     }
 
     Ok((tmp_dir, out_path))
@@ -45,7 +42,6 @@ int main() {
 #[test]
 fn simple_struct() -> anyhow::Result<()> {
     let (_tmpdir, path) = compile(SIMPLE)?;
-    println!("{:?}", path.to_str());
 
     let file = File::open(&path)?;
     let mmap = unsafe { Mmap::map(&file) }?;
@@ -76,7 +72,6 @@ int main() {
 #[test]
 fn padded_struct() -> anyhow::Result<()> {
     let (_tmpdir, path) = compile(PADDED)?;
-    println!("{:?}", path.to_str());
 
     let file = File::open(&path)?;
     let mmap = unsafe { Mmap::map(&file) }?;
@@ -105,6 +100,53 @@ fn padded_struct() -> anyhow::Result<()> {
 
     if let Ok(Some(second_offset)) = offsets[1] {
         assert!(second_offset == 8);
+    } else {
+        panic!("failed to get second offset");
+    }
+
+    Ok(())
+}
+
+const PACKED: &str = "
+struct packed {
+    unsigned int ui;
+    unsigned long long ull;
+} __attribute__((packed));
+int main() {
+    struct packed p;
+}";
+
+#[test]
+fn packed_struct() -> anyhow::Result<()> {
+    let (_tmpdir, path) = compile(PACKED)?;
+
+    let file = File::open(&path)?;
+    let mmap = unsafe { Mmap::map(&file) }?;
+    let mut dwarf = Dwarf::parse(&*mmap)?;
+
+    let found = dwarf.lookup_item::<dwat::Struct>("packed".to_string())?;
+    assert!(found.is_some());
+
+    let found = found.unwrap();
+    assert!(found.members(&dwarf)?.len() == 2);
+
+    // Expect packing to smoosh the long and int against eachother
+    let byte_size = found.byte_size(&dwarf)?;
+    assert!(byte_size.is_some());
+    assert!(byte_size.unwrap() == 12);
+
+    let offsets = found.members(&dwarf)?.into_iter().map(|memb| {
+        memb.member_location(&dwarf)
+    }).collect::<Vec<_>>();
+
+    if let Ok(Some(first_offset)) = offsets[0] {
+        assert!(first_offset == 0);
+    } else {
+        panic!("failed to get first offset");
+    }
+
+    if let Ok(Some(second_offset)) = offsets[1] {
+        assert!(second_offset == 4);
     } else {
         panic!("failed to get second offset");
     }
