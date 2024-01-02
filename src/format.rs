@@ -238,11 +238,8 @@ pub fn format_member(dwarf: &Dwarf, member: Member, tablevel: usize,
     formatted.push(';');
 
     if verbosity > 0 {
-
         // generic padding based on last newline in formatted string
-        let last_newline = formatted.rfind('\n')
-                                    .and_then(|idx| Some(idx+1))
-                                    .unwrap_or_else(|| 0);
+        let last_newline = formatted.rfind('\n').map(|idx| idx+1).unwrap_or(0);
 
         // cast to signed to prevent underflow
         let last_line_len: isize = (formatted.len()-last_newline) as isize;
@@ -250,18 +247,13 @@ pub fn format_member(dwarf: &Dwarf, member: Member, tablevel: usize,
             formatted.push(' ');
         }
 
-        loop {
-            if let Some(bytesz) = member.byte_size(dwarf)? {
-                if let Some(offset) = member.member_location(dwarf)? {
-                    formatted.push_str(
-                        &format!("\t/* size: {bytesz: >4} | \
-                                       offset: {offset: >4} */")
-                    );
-                    break
-                }
+        match (member.byte_size(dwarf)?, member.member_location(dwarf)?) {
+            (Some(bytesz), Some(offset)) => {
+                formatted.push_str(&format!("\t/* sz: {bytesz: >4} | \
+                                                  off: {offset: >4} */")
+                )
             }
-            formatted.push_str("\t/* size:    ? | offset:    ? */");
-            break
+            _ => formatted.push_str("\t/* sz:    ? | off:    ? */")
         }
     }
 

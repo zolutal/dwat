@@ -482,15 +482,15 @@ pub trait HasMembers {
 
     fn members(&self, dwarf: &Dwarf) -> Result<Vec<Member>, Error> {
         let mut members: Vec<Member> = Vec::new();
-        let _ = dwarf.unit_context(&self.location(), |unit| {
+        dwarf.unit_context(&self.location(), |unit| {
             let mut entries = {
                 match unit.entries_at_offset(self.location().offset) {
                     Ok(entries) => entries,
-                    _ => return (),
+                    _ => return
                 }
             };
             if entries.next_dfs().is_err() {
-                return ();
+                return;
             }
             while let Ok(Some((_, entry))) = entries.next_dfs() {
                 if entry.tag() != gimli::DW_TAG_member {
