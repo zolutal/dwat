@@ -984,7 +984,7 @@ impl<'a> Dwarf<'a> {
             }
             false
         })?;
-        Ok(None)
+        Ok(item)
     }
 
     pub fn get_named_items_map<T: Tagged>(&self)
