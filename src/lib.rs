@@ -1,3 +1,10 @@
+//! `dwat` is a library for accessing [DWARF](https://dwarfstd.org/)
+//! (v4/v5) debuging information.
+//!
+//! Currently, functionality is focused on making type information from DWARF
+//! more accessible by providing [pahole](https://github.com/acmel/dwarves)'s
+//! functionality in a library form.
+
 pub mod format;
 pub mod parse;
 
