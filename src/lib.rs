@@ -1,16 +1,18 @@
-pub mod parse;
 pub mod format;
+pub mod parse;
 
 pub use parse::*;
 
 pub mod prelude {
+    //! Re-exports commonly needed traits
     pub use super::parse::NamedType;
     pub use super::parse::InnerType;
     pub use super::parse::HasMembers;
 }
 
+/// Error type for parsing/loading DWARF information
 #[derive(thiserror::Error, Debug)]
-pub enum DwatError {
+pub enum Error {
     #[error("failed to load dwarf info from file")]
     DwarfLoadError(String),
 

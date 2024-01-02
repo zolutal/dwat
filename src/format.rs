@@ -1,9 +1,10 @@
+//! Formatting methods for type information.
+
 use crate::prelude::*;
 use crate::MemberType;
 use crate::Member;
 use crate::Dwarf;
-
-type Error = crate::DwatError;
+use crate::Error;
 
 pub fn format_type(dwarf: &Dwarf, member_name: String, typ: MemberType,
                    level: usize, tablevel: usize, verbosity: u8)

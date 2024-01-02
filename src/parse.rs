@@ -1,3 +1,4 @@
+//! Load and Parse DWARF debugging information
 use std::{collections::HashMap, borrow::Cow};
 use object::{Object, ObjectSection, ReadRef};
 use fallible_iterator::FallibleIterator;
@@ -5,7 +6,7 @@ use gimli::{RunTimeEndian, DebugStrOffset};
 use gimli::AttributeValue;
 
 use crate::format::format_member;
-use crate::DwatError as Error;
+use crate::Error;
 
 // Abbreviations for some lengthy gimli types
 type R<'a> = gimli::EndianSlice<'a, RunTimeEndian>;
