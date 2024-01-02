@@ -7,14 +7,16 @@ use crate::Dwarf;
 use crate::Error;
 
 pub fn format_type(dwarf: &Dwarf, member_name: String, typ: MemberType,
-                   level: usize, tablevel: usize, verbosity: u8)
+                   level: usize, tablevel: usize, verbosity: u8,
+                   base_offset: usize)
 -> Result<String, Error> {
     let mut out = String::new();
     match typ {
         MemberType::Array(a) => {
             if let Some(inner) = a.get_type(dwarf)? {
                 let inner_fmt = format_type(dwarf, "".to_string(), inner,
-                                            level+1, tablevel, verbosity)?;
+                                            level+1, tablevel, verbosity,
+                                            base_offset)?;
                 out.push_str(&inner_fmt);
                 if !out.ends_with('*') {
                     out.push(' ');
@@ -61,7 +63,8 @@ pub fn format_type(dwarf: &Dwarf, member_name: String, typ: MemberType,
             out.push_str("struct {\n");
             for memb in t.members(dwarf)?.into_iter() {
                 out.push_str(
-                    &format_member(dwarf, memb, tablevel+1, verbosity)?
+                    &format_member(dwarf, memb, tablevel+1,
+                                   verbosity, base_offset)?
                 );
             }
 
@@ -98,7 +101,8 @@ pub fn format_type(dwarf: &Dwarf, member_name: String, typ: MemberType,
             out.push_str("union {\n");
             for memb in u.members(dwarf)?.into_iter() {
                 out.push_str(
-                    &format_member(dwarf, memb, tablevel+1, verbosity)?);
+                    &format_member(dwarf, memb, tablevel+1,
+                                   verbosity, base_offset)?);
             }
 
             for _ in 0..=tablevel {
@@ -125,7 +129,8 @@ pub fn format_type(dwarf: &Dwarf, member_name: String, typ: MemberType,
                 // recursively convert type to string
                 if let Some(param) = param {
                     out.push_str(&format_type(dwarf, "".to_string(),
-                                 param, level+1, tablevel, verbosity)?);
+                                 param, level+1, tablevel, verbosity,
+                                 base_offset)?);
                     if pidx != params.len()-1 {
                         out.push_str(", ");
                     }
@@ -145,7 +150,8 @@ pub fn format_type(dwarf: &Dwarf, member_name: String, typ: MemberType,
                 let argstr = {
                     format_type(dwarf, "".to_string(),
                                 MemberType::Subroutine(subp),
-                                level+1, tablevel, verbosity)?
+                                level+1, tablevel, verbosity,
+                                base_offset)?
                 };
 
                 out.push_str(
@@ -159,7 +165,8 @@ pub fn format_type(dwarf: &Dwarf, member_name: String, typ: MemberType,
             let ptr_type = match inner {
                 Some(inner) => {
                     format_type(dwarf, "".to_string(), inner,
-                                level+1, tablevel, verbosity)?
+                                level+1, tablevel, verbosity,
+                                base_offset)?
                 },
                 None => {
                     "void".to_string()
@@ -182,7 +189,8 @@ pub fn format_type(dwarf: &Dwarf, member_name: String, typ: MemberType,
         MemberType::Const(c) => {
             if let Some(inner) = c.get_type(dwarf)? {
                 let inner_fmt = format_type(dwarf, "".to_string(), inner,
-                                            level+1, tablevel, verbosity)?;
+                                            level+1, tablevel, verbosity,
+                                            base_offset)?;
                 out.push_str(&format!("const {inner_fmt}"));
                 return Ok(out);
             }
@@ -192,7 +200,8 @@ pub fn format_type(dwarf: &Dwarf, member_name: String, typ: MemberType,
         MemberType::Volatile(c) => {
             if let Some(inner) = c.get_type(dwarf)? {
                 let inner_fmt = format_type(dwarf, "".to_string(), inner,
-                                                 level+1, tablevel, verbosity)?;
+                                                 level+1, tablevel, verbosity,
+                                                 base_offset)?;
                 out.push_str(&format!("volatile {inner_fmt}"));
             }
             return Ok(out);
@@ -200,7 +209,8 @@ pub fn format_type(dwarf: &Dwarf, member_name: String, typ: MemberType,
         MemberType::Restrict(c) => {
             if let Some(inner) = c.get_type(dwarf)? {
                 let inner_fmt = format_type(dwarf, "".to_string(), inner,
-                                                 level+1, tablevel, verbosity)?;
+                                                 level+1, tablevel, verbosity,
+                                                 base_offset)?;
                 out.push_str(&format!("{inner_fmt} restrict"));
             }
             return Ok(out);
@@ -213,7 +223,7 @@ pub fn format_type(dwarf: &Dwarf, member_name: String, typ: MemberType,
 }
 
 pub fn format_member(dwarf: &Dwarf, member: Member, tablevel: usize,
-                     verbosity: u8)
+                     verbosity: u8, base_offset: usize)
 -> Result<String, Error> {
     let mut name = String::new();
     if let Some(n) = member.name(dwarf)? {
@@ -227,8 +237,10 @@ pub fn format_member(dwarf: &Dwarf, member: Member, tablevel: usize,
         formatted.push_str("    ");
     }
 
+    let offset = base_offset + member.member_location(dwarf)?.unwrap_or(0);
+
     formatted.push_str(
-        &format_type(dwarf, name, mtype, 0, tablevel, verbosity)?
+        &format_type(dwarf, name, mtype, 0, tablevel, verbosity, offset)?
     );
 
     let bitsz = member.bit_size(dwarf)?;
@@ -248,13 +260,11 @@ pub fn format_member(dwarf: &Dwarf, member: Member, tablevel: usize,
             formatted.push(' ');
         }
 
-        match (member.byte_size(dwarf)?, member.member_location(dwarf)?) {
-            (Some(bytesz), Some(offset)) => {
-                formatted.push_str(&format!("\t/* sz: {bytesz: >4} | \
-                                                  off: {offset: >4} */")
-                )
-            }
-            _ => formatted.push_str("\t/* sz:    ? | off:    ? */")
+        if let Some(bytesz) = member.byte_size(dwarf)? {
+            formatted.push_str(&format!("\t/* sz: {bytesz: >4} | \
+                                              off: {offset: >4} */"));
+        } else { // probably unreachable?
+            formatted.push_str("\t/* sz:    ? | off: {offset: >4} */")
         }
     }
 

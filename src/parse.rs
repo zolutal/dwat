@@ -559,7 +559,10 @@ impl Struct {
         }
         let members = self.members(dwarf)?;
         for member in members.into_iter() {
-            repr.push_str(&format_member(dwarf, member, 0, verbosity)?);
+            let tab_level = 0;
+            let base_offset = 0;
+            repr.push_str(&format_member(dwarf, member, tab_level,
+                                         verbosity, base_offset)?);
         }
         if verbosity > 0 {
             if let Some(bytesz) = self.byte_size(dwarf)? {
@@ -608,7 +611,10 @@ impl Union {
         }
         let members = self.members(dwarf)?;
         for member in members.into_iter() {
-            repr.push_str(&format_member(dwarf, member, 0, verbosity)?);
+            let tab_level = 0;
+            let base_offset = 0;
+            repr.push_str(&format_member(dwarf, member, tab_level,
+                                         verbosity, base_offset)?);
         }
         repr.push_str("};");
         Ok(repr)
