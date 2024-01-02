@@ -13,86 +13,99 @@ type DIE<'a> = gimli::DebuggingInformationEntry<'a, 'a, R<'a>, usize>;
 type CU<'a> = gimli::Unit<R<'a>, usize>;
 type GimliDwarf<'a> = gimli::Dwarf<R<'a>>;
 
+/// Represents a location of some type/tag in the DWARF information
 #[derive(Copy, Clone, Debug, PartialEq, Eq)]
 pub struct Location {
     pub header: usize,
     pub offset: gimli::UnitOffset,
 }
 
+/// Represents a struct type
 #[derive(Clone, Copy, Debug)]
 pub struct Struct {
     pub location: Location,
 }
 
+/// Represents an array type
 #[derive(Clone, Copy, Debug)]
 pub struct Array {
     pub location: Location,
 }
 
+/// Represents an enum type
 #[derive(Clone, Copy, Debug)]
 pub struct Enum {
     pub location: Location,
 }
 
+/// Represents a pointer to a type
 #[derive(Clone, Copy, Debug)]
 pub struct Pointer {
     pub location: Location,
 }
 
+/// Represents a type that is a function pointer prototype
 #[derive(Clone, Copy, Debug)]
 pub struct Subroutine {
     pub location: Location,
 }
 
+/// Represents a typedef renaming of a type
 #[derive(Clone, Copy, Debug)]
 pub struct Typedef {
     pub location: Location,
 }
 
+/// Represents a union type
 #[derive(Clone, Copy, Debug)]
 pub struct Union {
     pub location: Location,
 }
 
+/// Represents a base type, e.g. int, long, etc...
 #[derive(Clone, Copy, Debug)]
 pub struct Base {
     pub location: Location,
 }
 
+/// Represents the C const type-modifier
 #[derive(Clone, Copy, Debug)]
 pub struct Const {
     pub location: Location,
 }
 
+/// Represents the C volatile type-modifier
 #[derive(Clone, Copy, Debug)]
 pub struct Volatile {
     pub location: Location,
 }
 
+/// Represents the C restrict type-modifier
 #[derive(Clone, Copy, Debug)]
 pub struct Restrict {
     pub location: Location,
 }
 
+/// Represents the bounds of an array
 #[derive(Clone, Copy, Debug)]
 pub struct Subrange {
     pub location: Location,
 }
 
+/// Represents the arguments list of a Subprocedure
 #[derive(Clone, Copy, Debug)]
 pub struct FormalParameter {
     pub location: Location,
 }
 
+/// Represents a variable declaration
 #[derive(Clone, Copy, Debug)]
 pub struct Variable {
     pub location: Location,
 }
 
-/// A member is a field of a struct that has an unknown type
-/// members are found via a DW_TAG_member, they represent an intermediate state
-/// where we can know the location of the member type but haven't parsed it yet
-// TODO: Maybe this should be standardized, e.g.: don't hold type_loc
+/// Represents a field of a struct or union
+// TODO: Maybe this should be standardized, e.g.: don't hold type_loc?
 #[derive(Clone, Copy, Debug)]
 pub struct Member {
     pub memb_loc: Location,
@@ -272,7 +285,7 @@ pub trait InnerType {
     fn get_type(&self, dwarf: &Dwarf)
     -> Result<Option<MemberType>, Error> {
         dwarf.entry_context(&self.location().clone(), |entry|
-         -> Result<Option<MemberType>, Error> {
+        -> Result<Option<MemberType>, Error> {
             let mut attrs = entry.attrs();
             while let Ok(Some(attr)) = attrs.next() {
                 if attr.name() == gimli::DW_AT_type {
@@ -855,6 +868,7 @@ impl Array {
     }
 }
 
+/// Represents DWARF data
 pub struct Dwarf<'a> {
     dwarf_cow: gimli::Dwarf<Cow<'a, [u8]>>,
     endianness: RunTimeEndian
