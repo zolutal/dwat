@@ -548,8 +548,7 @@ impl Struct {
         for member in members.into_iter() {
             repr.push_str(&format_member(dwarf, member, 0, verbosity)?);
         }
-        let print_summary = true;
-        if print_summary {
+        if verbosity > 0 {
             if let Some(bytesz) = self.byte_size(dwarf)? {
                 repr.push_str(&format!("\n    /* total size: {} */\n", bytesz))
             } else {
