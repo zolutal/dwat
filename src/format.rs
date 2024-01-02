@@ -35,7 +35,7 @@ pub fn format_type(dwarf: &Dwarf, member_name: String, typ: MemberType,
             return Ok(out);
         }
         MemberType::Typedef(t) => {
-            if let Some(name) = t.name(dwarf) {
+            if let Some(name) = t.name(dwarf)? {
                 if level == 0 {
                     out.push_str(
                         &format!("{name} {member_name}")
@@ -46,7 +46,7 @@ pub fn format_type(dwarf: &Dwarf, member_name: String, typ: MemberType,
             }
         },
         MemberType::Struct(t) => {
-            if let Some(name) = t.name(dwarf) {
+            if let Some(name) = t.name(dwarf)? {
                 if level == 0 {
                     out.push_str(
                         &format!("struct {name} {member_name}")
@@ -58,7 +58,7 @@ pub fn format_type(dwarf: &Dwarf, member_name: String, typ: MemberType,
             }
             // reaching here means we hit a nested struct type
             out.push_str("struct {\n");
-            for memb in t.members(dwarf).into_iter() {
+            for memb in t.members(dwarf)?.into_iter() {
                 out.push_str(
                     &format_member(dwarf, memb, tablevel+1, verbosity)?
                 );
@@ -71,7 +71,7 @@ pub fn format_type(dwarf: &Dwarf, member_name: String, typ: MemberType,
             return Ok(out);
         },
         MemberType::Enum(t) => {
-            if let Some(name) = t.name(dwarf) {
+            if let Some(name) = t.name(dwarf)? {
                 if level == 0 {
                     out.push_str(
                         &format!("enum {name} {member_name}")
@@ -83,7 +83,7 @@ pub fn format_type(dwarf: &Dwarf, member_name: String, typ: MemberType,
             return Ok(out);
         },
         MemberType::Union(u) => {
-            if let Some(name) = u.name(dwarf) {
+            if let Some(name) = u.name(dwarf)? {
                 if level == 0 {
                     out.push_str(
                         &format!("union {name} {member_name}")
@@ -95,7 +95,7 @@ pub fn format_type(dwarf: &Dwarf, member_name: String, typ: MemberType,
             }
             // reaching here means we hit a nested union type
             out.push_str("union {\n");
-            for memb in u.members(dwarf).into_iter() {
+            for memb in u.members(dwarf)?.into_iter() {
                 out.push_str(
                     &format_member(dwarf, memb, tablevel+1, verbosity)?);
             }
@@ -107,7 +107,7 @@ pub fn format_type(dwarf: &Dwarf, member_name: String, typ: MemberType,
             return Ok(out);
         },
         MemberType::Base(t) => {
-            if let Some(name) = t.name(dwarf) {
+            if let Some(name) = t.name(dwarf)? {
                 if level == 0 {
                     out.push_str(&format!("{name} {member_name}"));
                     return Ok(out);

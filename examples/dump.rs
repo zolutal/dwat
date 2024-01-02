@@ -18,7 +18,7 @@ fn main() -> anyhow::Result<()> {
     let struct_map = dwarf.get_named_items_map::<dwat::Struct>()?;
 
     for (name, dwstruct) in struct_map.into_iter() {
-        let members = dwstruct.members(&dwarf);
+        let members = dwstruct.members(&dwarf)?;
         println!("{}\t{}", name, members.len());
     };
 

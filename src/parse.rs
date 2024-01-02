@@ -199,10 +199,10 @@ pub trait NamedType {
     // in that case: return Ok(None)
     // Ok(Err(..)) is only returned when something went wrong seeking the
     // member's location
-    fn name(&self, dwarf: &Dwarf) -> Option<String> {
+    fn name(&self, dwarf: &Dwarf) -> Result<Option<String>, Error> {
         dwarf.entry_context(&self.location(), |entry| {
             get_entry_name(dwarf, entry)
-        }).unwrap()
+        })
     }
 }
 
@@ -480,17 +480,17 @@ impl Member {
 pub trait HasMembers {
     fn location(&self) -> Location;
 
-    fn members(&self, dwarf: &Dwarf) -> Vec<Member> {
-        let members = dwarf.unit_context(&self.location(), |unit| {
-            let mut members: Vec<Member> = vec![];
+    fn members(&self, dwarf: &Dwarf) -> Result<Vec<Member>, Error> {
+        let mut members: Vec<Member> = Vec::new();
+        let _ = dwarf.unit_context(&self.location(), |unit| {
             let mut entries = {
                 match unit.entries_at_offset(self.location().offset) {
                     Ok(entries) => entries,
-                    _ => return members,
+                    _ => return (),
                 }
             };
             if entries.next_dfs().is_err() {
-                return members;
+                return ();
             }
             while let Ok(Some((_, entry))) = entries.next_dfs() {
                 if entry.tag() != gimli::DW_TAG_member {
@@ -514,9 +514,8 @@ pub trait HasMembers {
                     };
                 };
             };
-            members
-        });
-        members.unwrap()
+        })?;
+        Ok(members)
     }
 }
 
@@ -539,12 +538,12 @@ impl Struct {
 
     pub fn to_string_verbose(&self, dwarf: &Dwarf, verbosity: u8) -> Result<String, Error> {
         let mut repr = String::new();
-        if let Some(name) =  self.name(dwarf) {
+        if let Some(name) =  self.name(dwarf)? {
             repr.push_str(&format!("struct {} {{\n", name));
         } else {
             repr.push_str("struct {\n");
         }
-        let members = self.members(dwarf);
+        let members = self.members(dwarf)?;
         for member in members.into_iter() {
             repr.push_str(&format_member(dwarf, member, 0, verbosity)?);
         }
@@ -588,12 +587,12 @@ impl Union {
     pub fn to_string_verbose(&self, dwarf: &Dwarf, verbosity: u8)
     -> Result<String, Error> {
         let mut repr = String::new();
-        if let Some(name) =  self.name(dwarf) {
+        if let Some(name) =  self.name(dwarf)? {
             repr.push_str(&format!("union {} {{\n", name));
         } else {
             repr.push_str("union {\n");
         }
-        let members = self.members(dwarf);
+        let members = self.members(dwarf)?;
         for member in members.into_iter() {
             repr.push_str(&format_member(dwarf, member, 0, verbosity)?);
         }
@@ -618,7 +617,7 @@ impl Union {
         // children to find the size
         // do zero-member unions exist? maybe need to err here if bytesz is zero
         let mut bytesz = 0;
-        for member in self.members(dwarf) {
+        for member in self.members(dwarf)? {
             let member_type = member.get_type(dwarf)?;
             if let Some(membytesz) = member_type.byte_size(dwarf)? {
                 if membytesz > bytesz {
@@ -902,7 +901,7 @@ impl<'a> Dwarf<'a> {
                 Ok(entry) => entry,
                 Err(_) => {
                     return Err(
-                        Error::CUError(
+                        Error::DIEError(
                             format!("Failed to find DIE at location: {loc:?}")
                         )
                     );
