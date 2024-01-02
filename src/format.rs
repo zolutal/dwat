@@ -65,7 +65,7 @@ pub fn format_type(dwarf: &Dwarf, member_name: String, typ: MemberType,
             }
 
             for _ in 0..=tablevel {
-                out.push('\t');
+                out.push_str("    ");
             }
             out.push('}');
             return Ok(out);
@@ -101,7 +101,7 @@ pub fn format_type(dwarf: &Dwarf, member_name: String, typ: MemberType,
             }
 
             for _ in 0..=tablevel {
-                out.push('\t');
+                out.push_str("    ");
             }
             out.push('}');
             return Ok(out);
@@ -196,6 +196,14 @@ pub fn format_type(dwarf: &Dwarf, member_name: String, typ: MemberType,
             }
             return Ok(out);
         },
+        MemberType::Restrict(c) => {
+            if let Some(inner) = c.get_type(dwarf)? {
+                let inner_fmt = format_type(dwarf, "".to_string(), inner,
+                                                 level+1, tablevel, verbosity)?;
+                out.push_str(&format!("{inner_fmt} restrict"));
+            }
+            return Ok(out);
+        },
         _ => {
             eprintln!("Unhandled type could not be formatted {typ:?}");
         }
@@ -215,7 +223,7 @@ pub fn format_member(dwarf: &Dwarf, member: Member, tablevel: usize,
 
     let mut formatted = String::new();
     for _ in 0..=tablevel {
-        formatted.push('\t');
+        formatted.push_str("    ");
     }
 
     formatted.push_str(
@@ -230,11 +238,30 @@ pub fn format_member(dwarf: &Dwarf, member: Member, tablevel: usize,
     formatted.push(';');
 
     if verbosity > 0 {
-        formatted = format!("{: <48}", formatted);
-        if let Some(bytesz) = member.byte_size(dwarf)? {
-            formatted.push_str(&format!("\t/* size: {bytesz: >4} */"))
-        } else {
-            formatted.push_str("\t/* size:    ? */")
+
+        // generic padding based on last newline in formatted string
+        let last_newline = formatted.rfind('\n')
+                                    .and_then(|idx| Some(idx+1))
+                                    .unwrap_or_else(|| 0);
+
+        // cast to signed to prevent underflow
+        let last_line_len: isize = (formatted.len()-last_newline) as isize;
+        for _ in 0..(48-last_line_len) {
+            formatted.push(' ');
+        }
+
+        loop {
+            if let Some(bytesz) = member.byte_size(dwarf)? {
+                if let Some(offset) = member.member_location(dwarf)? {
+                    formatted.push_str(
+                        &format!("\t/* size: {bytesz: >4} | \
+                                       offset: {offset: >4} */")
+                    );
+                    break
+                }
+            }
+            formatted.push_str("\t/* size:    ? | offset:    ? */");
+            break
         }
     }
 

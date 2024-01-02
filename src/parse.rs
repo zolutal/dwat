@@ -70,6 +70,11 @@ pub struct Volatile {
 }
 
 #[derive(Clone, Copy, Debug)]
+pub struct Restrict {
+    pub location: Location,
+}
+
+#[derive(Clone, Copy, Debug)]
 pub struct Subrange {
     pub location: Location,
 }
@@ -106,6 +111,7 @@ pub enum MemberType {
     Base(Base),
     Const(Const),
     Volatile(Volatile),
+    Restrict(Restrict),
     Subrange(Subrange),
 }
 
@@ -140,6 +146,9 @@ impl MemberType {
                 cons.byte_size(dwarf)
             }
             MemberType::Volatile(vol) => {
+                vol.byte_size(dwarf)
+            }
+            MemberType::Restrict(vol) => {
                 vol.byte_size(dwarf)
             }
             // --- Unsized ---
@@ -216,6 +225,7 @@ impl_named_type!(Union);
 impl_named_type!(Base);
 impl_named_type!(Const);
 impl_named_type!(Volatile);
+impl_named_type!(Restrict);
 impl_named_type!(Subrange);
 impl_named_type!(Variable);
 
@@ -250,6 +260,7 @@ impl_tagged_type!(Union, gimli::DW_TAG_union_type);
 impl_tagged_type!(Base, gimli::DW_TAG_base_type);
 impl_tagged_type!(Const, gimli::DW_TAG_const_type);
 impl_tagged_type!(Volatile, gimli::DW_TAG_volatile_type);
+impl_tagged_type!(Restrict, gimli::DW_TAG_restrict_type);
 impl_tagged_type!(Subrange, gimli::DW_TAG_subrange_type);
 impl_tagged_type!(Variable, gimli::DW_TAG_variable);
 
@@ -293,6 +304,7 @@ macro_rules! impl_inner_type {
 
 impl_inner_type!(Const);
 impl_inner_type!(Volatile);
+impl_inner_type!(Restrict);
 impl_inner_type!(FormalParameter);
 impl_inner_type!(Subroutine);
 impl_inner_type!(Pointer);
@@ -306,7 +318,6 @@ fn get_entry_bit_size(entry: &DIE) -> Option<usize> {
     let mut attrs = entry.attrs();
     while let Ok(Some(attr)) = &attrs.next() {
         if attr.name() == gimli::DW_AT_bit_size {
-            //dbg!(attr.value());
             if let gimli::AttributeValue::Udata(v) = attr.value() {
                 return Some(v as usize);
             }
@@ -388,6 +399,9 @@ fn entry_to_type(location: Location, entry: &DIE) -> MemberType {
         gimli::DW_TAG_volatile_type => {
             MemberType::Volatile(Volatile{location})
         },
+        gimli::DW_TAG_restrict_type => {
+            MemberType::Restrict(Restrict{location})
+        },
         gimli::DW_TAG_subrange_type => {
             MemberType::Subrange(Subrange{location})
         },
@@ -446,6 +460,21 @@ impl Member {
             entry_to_type(self.type_loc, entry)
         })
     }
+
+    pub fn member_location(&self, dwarf: &Dwarf) -> Result<Option<usize>, Error> {
+        dwarf.entry_context(&self.memb_loc, |entry| {
+            let mut attrs = entry.attrs();
+            while let Ok(Some(attr)) = &attrs.next() {
+                if attr.name() == gimli::DW_AT_data_member_location {
+                    if let gimli::AttributeValue::Udata(v) = attr.value() {
+                        return Some(v as usize);
+                    }
+                }
+            }
+            None
+        })
+    }
+
 }
 
 pub trait HasMembers {
@@ -521,7 +550,13 @@ impl Struct {
         }
         let print_summary = true;
         if print_summary {
-
+            if let Some(bytesz) = self.byte_size(dwarf)? {
+                repr.push_str(&format!("\n    /* total size: {} */\n", bytesz))
+            } else {
+                // TODO: maybe byte_size should really just return an Error
+                // instead of None if it fails... this feels awkward
+                repr.push_str("\n    /* total size: ? */\n");
+            }
         }
         repr.push_str("};");
         Ok(repr)
@@ -537,22 +572,13 @@ impl Struct {
         })?;
 
         if let Some(entry_size) = entry_size {
-            return Ok(Some(entry_size));
+            return Ok(Some(entry_size))
         }
 
-        // should return 0 for zero-member structs
-        let mut bytesz = 0;
-        for member in self.members(dwarf) {
-            let member_type = member.get_type(dwarf)?;
-            if let Some(membytesz) = member_type.byte_size(dwarf)? {
-                bytesz += membytesz;
-            } else {
-                // maybe we should err here instead of returning None...
-                return Ok(None);
-            }
-        }
-        Ok(Some(bytesz))
+        // This should(?) be unreachable
+        Ok(None)
     }
+
 }
 
 impl Union {
@@ -703,6 +729,30 @@ impl Const {
 }
 
 impl Volatile {
+    fn location(&self) -> Location {
+        self.location
+    }
+
+    pub fn byte_size(&self, dwarf: &Dwarf) -> Result<Option<usize>, Error> {
+        let entry_size = dwarf.entry_context(&self.location(), |entry| {
+            get_entry_byte_size(entry)
+        })?;
+
+        if let Some(entry_size) = entry_size {
+            return Ok(Some(entry_size));
+        }
+
+        if let Some(inner_type) = self.get_type(dwarf)? {
+            if let Some(inner_size) = inner_type.byte_size(dwarf)? {
+                return Ok(Some(inner_size));
+            }
+        };
+
+        Ok(None)
+    }
+}
+
+impl Restrict {
     fn location(&self) -> Location {
         self.location
     }
