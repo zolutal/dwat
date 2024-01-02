@@ -78,3 +78,44 @@ struct ntb_ctrl_regs {
         u64 lut_entry[];
 };
 ```
+
+It is also possible to format structs in a verbose mode where offsets and sizes are included as comments:
+
+```rust
+    if let Some(found) = found {
+        println!("{}", found.to_string_verbose(&dwarf, 1)?);
+    }
+```
+
+```
+struct ntb_ctrl_regs {
+    u32 partition_status;                       	/* sz:    4 | off:    0 */
+    u32 partition_op;                           	/* sz:    4 | off:    4 */
+    u32 partition_ctrl;                         	/* sz:    4 | off:    8 */
+    u32 bar_setup;                              	/* sz:    4 | off:   12 */
+    u32 bar_error;                              	/* sz:    4 | off:   16 */
+    u16 lut_table_entries;                      	/* sz:    2 | off:   20 */
+    u16 lut_table_offset;                       	/* sz:    2 | off:   22 */
+    u32 lut_error;                              	/* sz:    4 | off:   24 */
+    u16 req_id_table_size;                      	/* sz:    2 | off:   28 */
+    u16 req_id_table_offset;                    	/* sz:    2 | off:   30 */
+    u32 req_id_error;                           	/* sz:    4 | off:   32 */
+    u32 reserved1[7];                           	/* sz:   28 | off:   36 */
+    struct {
+        u32 ctl;                                	/* sz:    4 | off:   64 */
+        u32 win_size;                           	/* sz:    4 | off:   68 */
+        u64 xlate_addr;                         	/* sz:    8 | off:   72 */
+    } bar_entry[6];                             	/* sz:   96 | off:   64 */
+    struct {
+        u32 win_size;                           	/* sz:    4 | off:  160 */
+        u32 reserved[3];                        	/* sz:   12 | off:  164 */
+    } bar_ext_entry[6];                         	/* sz:   96 | off:  160 */
+    u32 reserved2[192];                         	/* sz:  768 | off:  256 */
+    u32 req_id_table[512];                      	/* sz: 2048 | off: 1024 */
+    u32 reserved3[256];                         	/* sz: 1024 | off: 3072 */
+    u64 lut_entry[512];                         	/* sz: 4096 | off: 4096 */
+
+    /* total size: 8192 */
+};
+```
+
