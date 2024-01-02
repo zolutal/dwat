@@ -933,8 +933,9 @@ impl<'a> Dwarf<'a> {
         Ok(f(&unit))
     }
 
-    pub fn lookup_item<T: Tagged>(&mut self, name: String)
-    -> Result<Option<T>, Error> {
+    fn for_each_item<T: Tagged, F>(&self, mut f: F)
+    -> Result<(), Error>
+    where F: FnMut(&DIE, Location) -> bool {
         let dwarf = self.borrow_dwarf();
         let mut header_idx = 0;
         let mut unit_headers = dwarf.units();
@@ -955,100 +956,61 @@ impl<'a> Dwarf<'a> {
                     if attr.name() == gimli::DW_AT_declaration {
                         continue 'entries
                     }
-                }
 
-                if let Some(entry_name) = get_entry_name(self, entry) {
-                    if name != entry_name {
-                        continue;
-                    }
                     let location = Location {
                         header: header_idx,
                         offset: entry.offset(),
                     };
-                    let typ = T::new(location);
-                    return Ok(Some(typ));
+
+                    // return if function returns true
+                    if f(entry, location) {
+                        return Ok(())
+                    }
                 }
             }
             header_idx += 1;
         }
+        Ok(())
+    }
+
+    pub fn lookup_item<T: Tagged>(&mut self, name: String)
+    -> Result<Option<T>, Error> {
+        let mut item: Option<T> = None;
+        self.for_each_item::<T, _>(|entry, loc| {
+            if let Some(entry_name) = get_entry_name(self, entry) {
+                if name == entry_name {
+                    item = Some(T::new(loc));
+                    return true;
+                }
+            }
+            false
+        })?;
         Ok(None)
     }
 
     pub fn get_named_items_map<T: Tagged>(&self)
     -> Result<HashMap<String, T>, Error> {
-        let dwarf = self.borrow_dwarf();
-        let mut header_idx = 0;
-        let mut struct_locations: HashMap<String, T> = HashMap::new();
-        let mut unit_headers = dwarf.units();
-        while let Ok(Some(header)) = unit_headers.next() {
-            let unit = match dwarf.unit(header) {
-                Ok(unit) => unit,
-                Err(_) => continue
-            };
-            let mut entries = unit.entries();
-            'entries:
-            while let Ok(Some((_delta_depth, entry))) = entries.next_dfs() {
-                if entry.tag() != T::tag() {
-                    continue;
-                }
-
-                let mut attrs = entry.attrs();
-                while let Ok(Some(attr)) = attrs.next() {
-                    if attr.name() == gimli::DW_AT_declaration {
-                        continue 'entries
-                    }
-                }
-
-                if let Some(name) = get_entry_name(self, entry) {
-                    let location = Location {
-                        header: header_idx,
-                        offset: entry.offset(),
-                    };
-                    let typ = T::new(location);
-                    struct_locations.insert(name, typ);
-                }
+        let mut item_locations: HashMap<String, T> = HashMap::new();
+        self.for_each_item::<T, _>(|entry, loc| {
+            if let Some(name) = get_entry_name(self, entry) {
+                let typ = T::new(loc);
+                item_locations.insert(name, typ);
             }
-            header_idx += 1;
-        }
-        Ok(struct_locations)
+            false
+        })?;
+        Ok(item_locations)
     }
 
     pub fn get_named_items<T: Tagged>(&self)
     -> Result<Vec<(String, T)>, Error> {
-        let dwarf = self.borrow_dwarf();
-        let mut header_idx = 0;
-        let mut items = Vec::<(String, T)>::new();
-        let mut unit_headers = dwarf.units();
-        while let Ok(Some(header)) = unit_headers.next() {
-            let unit = match dwarf.unit(header) {
-                Ok(unit) => unit,
-                Err(_) => continue
-            };
-            let mut entries = unit.entries();
-            'entries:
-            while let Ok(Some((_delta_depth, entry))) = entries.next_dfs() {
-                if entry.tag() != T::tag() {
-                    continue;
-                }
-
-                let mut attrs = entry.attrs();
-                while let Ok(Some(attr)) = attrs.next() {
-                    if attr.name() == gimli::DW_AT_declaration {
-                        continue 'entries
-                    }
-                }
-
-                if let Some(name) = get_entry_name(self, entry) {
-                    let location = Location {
-                        header: header_idx,
-                        offset: entry.offset(),
-                    };
-                    let typ = T::new(location);
-                    items.push((name, typ));
-                }
+        let mut items: Vec<(String, T)> = Vec::new();
+        self.for_each_item::<T, _>(|entry, loc| {
+            if let Some(name) = get_entry_name(self, entry) {
+                let typ = T::new(loc);
+                items.push((name, typ));
             }
-            header_idx += 1;
-        }
+            false
+        })?;
         Ok(items)
     }
 }
