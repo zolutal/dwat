@@ -79,13 +79,16 @@ struct ntb_ctrl_regs {
 };
 ```
 
-It is also possible to format structs in a verbose mode where offsets and sizes are included as comments:
+It is also possible to format structs in a verbose mode:
 
 ```rust
     if let Some(found) = found {
         println!("{}", found.to_string_verbose(&dwarf, 1)?);
     }
 ```
+
+
+Which will add offsets and sizes as comments, similar to the default output of pahole:
 
 ```
 struct ntb_ctrl_regs {
