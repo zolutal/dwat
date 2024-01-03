@@ -269,9 +269,12 @@ pub fn format_member(dwarf: &Dwarf, member: Member, tablevel: usize,
         &format_type(dwarf, name, mtype, 0, tablevel, verbosity, offset)?
     );
 
-    let bitsz = member.bit_size(dwarf)?;
-    if let Some(bitsz) = bitsz {
-        formatted.push_str(&format!(":{bitsz}"));
+    match member.bit_size(dwarf) {
+        Ok(bitsz) => {
+            formatted.push_str(&format!(":{bitsz}"));
+        }
+        Err(Error::BitSizeAttributeNotFound) => {},
+        Err(e) => return Err(e)
     }
 
     formatted.push(';');

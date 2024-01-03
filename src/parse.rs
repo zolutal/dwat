@@ -425,7 +425,6 @@ fn entry_to_type(location: Location, entry: &DIE) -> Result<MemberType, Error> {
             MemberType::Subrange(Subrange{location})
         },
         _ => {
-            // TODO: return an error indicating unimplemented?
             return Err(Error::UnimplementedError(
                     "entry_to_type, unhandled dwarf type".to_string()
             ));
@@ -435,10 +434,16 @@ fn entry_to_type(location: Location, entry: &DIE) -> Result<MemberType, Error> {
 }
 
 impl Member {
-    pub fn bit_size(&self, dwarf: &Dwarf) -> Result<Option<usize>, Error> {
-        dwarf.entry_context(&self.location, |entry| {
+    pub fn bit_size(&self, dwarf: &Dwarf) -> Result<usize, Error> {
+        let bit_size = dwarf.entry_context(&self.location, |entry| {
             get_entry_bit_size(entry)
-        })
+        })?;
+        if let Some(bit_size) = bit_size {
+            Ok(bit_size)
+        } else {
+            Err(Error::ByteSizeAttributeNotFound)
+        }
+
     }
 
     pub fn byte_size(&self, dwarf: &Dwarf) -> Result<usize, Error> {

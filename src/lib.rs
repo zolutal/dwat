@@ -45,4 +45,7 @@ pub enum Error {
 
     #[error("failure when attempting to find a ByteSize Attribute")]
     ByteSizeAttributeNotFound,
+
+    #[error("failure when attempting to find a BitSize Attribute")]
+    BitSizeAttributeNotFound,
 }
