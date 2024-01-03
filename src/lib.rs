@@ -33,6 +33,9 @@ pub enum Error {
     #[error("failed when attempting to get some DIE")]
     DIEError(String),
 
+    #[error("failed due to unimplemented functionality")]
+    UnimplementedError(String),
+
     // Non-Fatal
     #[error("failure when attempting to find a Name Attribute")]
     NameAttributeNotFound,

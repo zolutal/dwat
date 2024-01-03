@@ -300,7 +300,7 @@ pub trait InnerType {
                             offset,
                         };
                         return dwarf.entry_context(&type_loc, |entry| {
-                            Ok(entry_to_type(type_loc, entry))
+                            entry_to_type(type_loc, entry)
                         })?
                     }
                 };
@@ -386,8 +386,8 @@ impl Subroutine {
     }
 }
 
-fn entry_to_type(location: Location, entry: &DIE) -> MemberType {
-    match entry.tag() {
+fn entry_to_type(location: Location, entry: &DIE) -> Result<MemberType, Error> {
+    let tag = match entry.tag() {
         gimli::DW_TAG_array_type => {
             MemberType::Array(Array{location})
         },
@@ -426,10 +426,12 @@ fn entry_to_type(location: Location, entry: &DIE) -> MemberType {
         },
         _ => {
             // TODO: return an error indicating unimplemented?
-            dbg!(entry.tag());
-            unimplemented!("entry_to_type, unhandled dwarf type")
+            return Err(Error::UnimplementedError(
+                    "entry_to_type, unhandled dwarf type".to_string()
+            ));
         }
-    }
+    };
+    Ok(tag)
 }
 
 impl Member {
