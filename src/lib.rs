@@ -7,7 +7,9 @@
 
 pub mod format;
 pub mod parse;
+pub mod dwarf;
 
+pub use dwarf::Dwarf;
 pub use parse::*;
 
 pub mod prelude {

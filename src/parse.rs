@@ -1,18 +1,16 @@
-//! Load and Parse DWARF debugging information
-use std::{collections::HashMap, borrow::Cow};
-use object::{Object, ObjectSection, ReadRef};
-use fallible_iterator::FallibleIterator;
+//! Parse DWARF debugging information
 use gimli::{RunTimeEndian, DebugStrOffset};
 use gimli::AttributeValue;
 
 use crate::format::format_member;
+use crate::Dwarf;
 use crate::Error;
 
 // Abbreviations for some lengthy gimli types
-type R<'a> = gimli::EndianSlice<'a, RunTimeEndian>;
-type DIE<'a> = gimli::DebuggingInformationEntry<'a, 'a, R<'a>, usize>;
-type CU<'a> = gimli::Unit<R<'a>, usize>;
-type GimliDwarf<'a> = gimli::Dwarf<R<'a>>;
+pub(crate) type R<'a> = gimli::EndianSlice<'a, RunTimeEndian>;
+pub(crate) type DIE<'a> = gimli::DebuggingInformationEntry<'a,'a,R<'a>,usize>;
+pub(crate) type CU<'a> = gimli::Unit<R<'a>, usize>;
+pub(crate) type GimliDwarf<'a> = gimli::Dwarf<R<'a>>;
 
 /// Represents a location of some type/tag in the DWARF information
 #[derive(Copy, Clone, Debug, PartialEq, Eq)]
@@ -172,7 +170,7 @@ impl MemberType {
 }
 
 // Try to retrieve a string from the debug_str section for a given offset
-fn from_dbg_str_ref(dwarf: &Dwarf, str_ref: DebugStrOffset<usize>)
+pub(crate) fn from_dbg_str_ref(dwarf: &Dwarf, str_ref: DebugStrOffset<usize>)
 -> Option<String> {
     let dwarf = dwarf.borrow_dwarf();
     if let Ok(str_ref) = dwarf.debug_str.get_str(str_ref) {
@@ -183,7 +181,7 @@ fn from_dbg_str_ref(dwarf: &Dwarf, str_ref: DebugStrOffset<usize>)
 }
 
 // Try to retrieve the name attribute as a string for a DIE if one exists
-fn get_entry_name(dwarf: &Dwarf, entry: &DIE) -> Option<String> {
+pub(crate) fn get_entry_name(dwarf: &Dwarf, entry: &DIE) -> Option<String> {
     let mut attrs = entry.attrs();
     while let Ok(Some(attr)) = &attrs.next() {
         if attr.name() == gimli::DW_AT_name {
@@ -811,164 +809,5 @@ impl Array {
         let bound = self.get_bound(dwarf)?;
         let inner_size = inner_type.byte_size(dwarf)?;
         Ok(inner_size * bound)
-    }
-}
-
-/// Represents DWARF data
-pub struct Dwarf<'a> {
-    dwarf_cow: gimli::Dwarf<Cow<'a, [u8]>>,
-    endianness: RunTimeEndian
-}
-
-impl<'a> Dwarf<'a> {
-    pub fn parse(data: impl ReadRef<'a>) -> Result<Self, Error> {
-        let object = object::File::parse(data)?;
-
-        let endianness = if object.is_little_endian() {
-            gimli::RunTimeEndian::Little
-        } else {
-            gimli::RunTimeEndian::Big
-        };
-
-        let load_section = |id: gimli::SectionId|
-        -> Result<Cow<[u8]>, gimli::Error> {
-            match object.section_by_name(id.name()) {
-                Some(ref section) => Ok(section
-                    .uncompressed_data()
-                    .unwrap_or(Cow::Borrowed(&[][..]))),
-                None => Ok(Cow::Borrowed(&[][..])),
-            }
-        };
-
-        // Load all of the sections.
-        let dwarf_cow = gimli::Dwarf::load(&load_section).unwrap();
-
-        Ok(Self{dwarf_cow, endianness})
-    }
-
-    fn borrow_dwarf(&self) -> GimliDwarf {
-        let borrow_section: &dyn for<'b> Fn(&'b Cow<[u8]>,
-        ) -> gimli::EndianSlice<'b, gimli::RunTimeEndian> =
-        &|section| gimli::EndianSlice::new(section, self.endianness);
-
-        self.dwarf_cow.borrow(borrow_section)
-    }
-
-    fn entry_context<F,R>(&self, loc: &Location, f: F) -> Result<R, Error>
-    where F: FnOnce(&DIE) -> R {
-        self.unit_context(loc, |unit| -> Result<R, Error> {
-            let entry = match unit.entry(loc.offset) {
-                Ok(entry) => entry,
-                Err(_) => {
-                    return Err(
-                        Error::DIEError(
-                            format!("Failed to find DIE at location: {loc:?}")
-                        )
-                    );
-                }
-            };
-            Ok(f(&entry))
-        })?
-    }
-
-    fn unit_context<F,R>(&self, loc: &Location, f: F) -> Result<R, Error>
-    where F: FnOnce(&CU) -> R {
-        let dwarf = self.borrow_dwarf();
-        let mut unit_headers = dwarf.units();
-        let unit = if let Ok(Some(header)) = unit_headers.nth(loc.header) {
-            if let Ok(unit) = dwarf.unit(header) {
-                unit
-            } else {
-                return Err(Error::CUError(
-                    format!("Failed to find CU at location: {:?}", loc)
-                ));
-            }
-        } else {
-            return Err(Error::CUError(
-                format!("Failed to find CU header at location: {:?}", loc)
-            ));
-        };
-        Ok(f(&unit))
-    }
-
-    fn for_each_item<T: Tagged, F>(&self, mut f: F)
-    -> Result<(), Error>
-    where F: FnMut(&DIE, Location) -> bool {
-        let dwarf = self.borrow_dwarf();
-        let mut header_idx = 0;
-        let mut unit_headers = dwarf.units();
-        while let Ok(Some(header)) = unit_headers.next() {
-            let unit = match dwarf.unit(header) {
-                Ok(unit) => unit,
-                Err(_) => continue
-            };
-            let mut entries = unit.entries();
-            'entries:
-            while let Ok(Some((_delta_depth, entry))) = entries.next_dfs() {
-                if entry.tag() != T::tag() {
-                    continue;
-                }
-
-                let mut attrs = entry.attrs();
-                while let Ok(Some(attr)) = attrs.next() {
-                    if attr.name() == gimli::DW_AT_declaration {
-                        continue 'entries
-                    }
-                }
-
-                let location = Location {
-                    header: header_idx,
-                    offset: entry.offset(),
-                };
-
-                // return if function returns true
-                if f(entry, location) {
-                    return Ok(())
-                }
-            }
-            header_idx += 1;
-        }
-        Ok(())
-    }
-
-    pub fn lookup_item<T: Tagged>(&mut self, name: String)
-    -> Result<Option<T>, Error> {
-        let mut item: Option<T> = None;
-        self.for_each_item::<T, _>(|entry, loc| {
-            if let Some(entry_name) = get_entry_name(self, entry) {
-                if name == entry_name {
-                    item = Some(T::new(loc));
-                    return true;
-                }
-            }
-            false
-        })?;
-        Ok(item)
-    }
-
-    pub fn get_named_items_map<T: Tagged>(&self)
-    -> Result<HashMap<String, T>, Error> {
-        let mut item_locations: HashMap<String, T> = HashMap::new();
-        self.for_each_item::<T, _>(|entry, loc| {
-            if let Some(name) = get_entry_name(self, entry) {
-                let typ = T::new(loc);
-                item_locations.insert(name, typ);
-            }
-            false
-        })?;
-        Ok(item_locations)
-    }
-
-    pub fn get_named_items<T: Tagged>(&self)
-    -> Result<Vec<(String, T)>, Error> {
-        let mut items: Vec<(String, T)> = Vec::new();
-        self.for_each_item::<T, _>(|entry, loc| {
-            if let Some(name) = get_entry_name(self, entry) {
-                let typ = T::new(loc);
-                items.push((name, typ));
-            }
-            false
-        })?;
-        Ok(items)
     }
 }
