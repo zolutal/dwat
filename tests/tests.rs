@@ -87,16 +87,16 @@ fn padded_struct() -> anyhow::Result<()> {
     assert!(byte_size == 16);
 
     let offsets = found.members(&dwarf)?.into_iter().map(|memb| {
-        memb.member_location(&dwarf)
+        memb.offset(&dwarf)
     }).collect::<Vec<_>>();
 
-    if let Ok(Some(first_offset)) = offsets[0] {
+    if let Ok(first_offset) = offsets[0] {
         assert!(first_offset == 0);
     } else {
         panic!("failed to get first offset");
     }
 
-    if let Ok(Some(second_offset)) = offsets[1] {
+    if let Ok(second_offset) = offsets[1] {
         assert!(second_offset == 8);
     } else {
         panic!("failed to get second offset");
@@ -133,16 +133,16 @@ fn packed_struct() -> anyhow::Result<()> {
     assert!(byte_size == 12);
 
     let offsets = found.members(&dwarf)?.into_iter().map(|memb| {
-        memb.member_location(&dwarf)
+        memb.offset(&dwarf)
     }).collect::<Vec<_>>();
 
-    if let Ok(Some(first_offset)) = offsets[0] {
+    if let Ok(first_offset) = offsets[0] {
         assert!(first_offset == 0);
     } else {
         panic!("failed to get first offset");
     }
 
-    if let Ok(Some(second_offset)) = offsets[1] {
+    if let Ok(second_offset) = offsets[1] {
         assert!(second_offset == 4);
     } else {
         panic!("failed to get second offset");

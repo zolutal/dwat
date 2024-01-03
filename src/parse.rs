@@ -451,8 +451,8 @@ impl Member {
         inner.byte_size(dwarf)
     }
 
-    pub fn member_location(&self, dwarf: &Dwarf) -> Result<Option<usize>, Error> {
-        dwarf.entry_context(&self.location, |entry| {
+    pub fn member_location(&self, dwarf: &Dwarf) -> Result<usize, Error> {
+        let member_location = dwarf.entry_context(&self.location, |entry| {
             let mut attrs = entry.attrs();
             while let Ok(Some(attr)) = &attrs.next() {
                 if attr.name() == gimli::DW_AT_data_member_location {
@@ -462,7 +462,18 @@ impl Member {
                 }
             }
             None
-        })
+        })?;
+
+        if let Some(member_location) = member_location {
+            Ok(member_location)
+        } else {
+            Err(Error::MemberLocationAttributeNotFound)
+        }
+    }
+
+    /// Alias for member_location
+    pub fn offset(&self, dwarf: &Dwarf) -> Result<usize, Error> {
+        self.member_location(dwarf)
     }
 }
 

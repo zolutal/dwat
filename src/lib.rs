@@ -48,4 +48,7 @@ pub enum Error {
 
     #[error("failure when attempting to find a BitSize Attribute")]
     BitSizeAttributeNotFound,
+
+    #[error("failure when attempting to find a MemberLocation Attribute")]
+    MemberLocationAttributeNotFound,
 }

@@ -263,7 +263,13 @@ pub fn format_member(dwarf: &Dwarf, member: Member, tablevel: usize,
         formatted.push_str("    ");
     }
 
-    let offset = base_offset + member.member_location(dwarf)?.unwrap_or(0);
+    let memb_offset = match member.offset(dwarf) {
+        Ok(memb_offset) => memb_offset,
+        Err(Error::MemberLocationAttributeNotFound) => 0,
+        Err(e) => return Err(e)
+
+    };
+    let offset = base_offset + memb_offset;
 
     formatted.push_str(
         &format_type(dwarf, name, mtype, 0, tablevel, verbosity, offset)?
