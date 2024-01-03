@@ -441,7 +441,7 @@ impl Member {
         if let Some(bit_size) = bit_size {
             Ok(bit_size)
         } else {
-            Err(Error::ByteSizeAttributeNotFound)
+            Err(Error::BitSizeAttributeNotFound)
         }
 
     }
