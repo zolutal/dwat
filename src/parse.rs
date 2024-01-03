@@ -129,7 +129,7 @@ pub enum MemberType {
 }
 
 impl MemberType {
-    pub fn byte_size(&self, dwarf: &Dwarf) -> Result<Option<usize>, Error> {
+    pub fn byte_size(&self, dwarf: &Dwarf) -> Result<usize, Error> {
         match self {
             MemberType::Struct(struc) => {
                 struc.byte_size(dwarf)
@@ -439,12 +439,9 @@ impl Member {
         })
     }
 
-    pub fn byte_size(&self, dwarf: &Dwarf) -> Result<Option<usize>, Error> {
+    pub fn byte_size(&self, dwarf: &Dwarf) -> Result<usize, Error> {
         let inner = self.get_type(dwarf)?;
-        if let Some(bytesz) = inner.byte_size(dwarf)? {
-            return Ok(Some(bytesz))
-        }
-        Ok(None)
+        inner.byte_size(dwarf)
     }
 
     pub fn member_location(&self, dwarf: &Dwarf) -> Result<Option<usize>, Error> {
@@ -524,13 +521,8 @@ impl Struct {
                                          verbosity, base_offset)?);
         }
         if verbosity > 0 {
-            if let Some(bytesz) = self.byte_size(dwarf)? {
-                repr.push_str(&format!("\n    /* total size: {} */\n", bytesz))
-            } else {
-                // TODO: maybe byte_size should really just return an Error
-                // instead of None if it fails... this feels awkward
-                repr.push_str("\n    /* total size: ? */\n");
-            }
+            let bytesz = self.byte_size(dwarf)?;
+            repr.push_str(&format!("\n    /* total size: {} */\n", bytesz));
         }
         repr.push_str("};");
         Ok(repr)
@@ -540,17 +532,17 @@ impl Struct {
         self.to_string_verbose(dwarf, 0)
     }
 
-    pub fn byte_size(&self, dwarf: &Dwarf) -> Result<Option<usize>, Error> {
+    pub fn byte_size(&self, dwarf: &Dwarf) -> Result<usize, Error> {
         let entry_size = dwarf.entry_context(&self.location(), |entry| {
             get_entry_byte_size(entry)
         })?;
 
         if let Some(entry_size) = entry_size {
-            return Ok(Some(entry_size))
+            return Ok(entry_size)
         }
 
         // This should(?) be unreachable
-        Ok(None)
+        Err(Error::ByteSizeAttributeError)
     }
 
 }
@@ -583,13 +575,13 @@ impl Union {
         self.to_string_verbose(dwarf, 0)
     }
 
-    fn byte_size(&self, dwarf: &Dwarf) -> Result<Option<usize>, Error> {
+    fn byte_size(&self, dwarf: &Dwarf) -> Result<usize, Error> {
         let entry_size = dwarf.entry_context(&self.location(), |entry| {
             get_entry_byte_size(entry)
         })?;
 
         if let Some(entry_size) = entry_size {
-            return Ok(Some(entry_size));
+            return Ok(entry_size);
         }
 
         // if there was no byte_size attribute, need to loop over all the
@@ -598,16 +590,13 @@ impl Union {
         let mut bytesz = 0;
         for member in self.members(dwarf)? {
             let member_type = member.get_type(dwarf)?;
-            if let Some(membytesz) = member_type.byte_size(dwarf)? {
-                if membytesz > bytesz {
-                    bytesz = membytesz;
-                }
-            } else {
-                // maybe we should err here instead of returning None...
-                return Ok(None);
+            let membytesz = member_type.byte_size(dwarf)?;
+
+            if membytesz > bytesz {
+                bytesz = membytesz;
             }
         }
-        Ok(Some(bytesz))
+        Ok(bytesz)
     }
 }
 
@@ -616,13 +605,13 @@ impl Enum {
         self.location
     }
 
-    fn byte_size(&self, dwarf: &Dwarf) -> Result<Option<usize>, Error> {
+    fn byte_size(&self, dwarf: &Dwarf) -> Result<usize, Error> {
         let entry_size = dwarf.entry_context(&self.location(), |entry| {
             get_entry_byte_size(entry)
         })?;
 
         if let Some(entry_size) = entry_size {
-            return Ok(Some(entry_size));
+            return Ok(entry_size);
         }
 
         self.get_type(dwarf)?.byte_size(dwarf)
@@ -636,21 +625,27 @@ impl Pointer {
     }
 
     // special case of byte_size, pointer is of size address_size
-    pub fn byte_size(&self, dwarf: &Dwarf) -> Result<Option<usize>, Error> {
+    pub fn byte_size(&self, dwarf: &Dwarf) -> Result<usize, Error> {
         let size = dwarf.unit_context(&self.location, |unit| {
             unit.header.encoding().address_size as usize
         })?;
-        Ok(Some(size))
+        Ok(size)
     }
 }
 
 impl Base {
     // if a base type doesn't have a size something is horribly wrong
     // so don't recurse on them
-    pub fn byte_size(&self, dwarf: &Dwarf) -> Result<Option<usize>, Error> {
-        dwarf.entry_context(&self.location(), |entry| {
+    pub fn byte_size(&self, dwarf: &Dwarf) -> Result<usize, Error> {
+        let entry_size = dwarf.entry_context(&self.location(), |entry| {
             get_entry_byte_size(entry)
-        })
+        })?;
+
+        if let Some(entry_size) = entry_size {
+            Ok(entry_size)
+        } else {
+            Err(Error::ByteSizeAttributeError)
+        }
     }
 }
 
@@ -659,21 +654,17 @@ impl Typedef {
         self.location
     }
 
-    pub fn byte_size(&self, dwarf: &Dwarf) -> Result<Option<usize>, Error> {
+    pub fn byte_size(&self, dwarf: &Dwarf) -> Result<usize, Error> {
         let entry_size = dwarf.entry_context(&self.location(), |entry| {
             get_entry_byte_size(entry)
         })?;
 
         if let Some(entry_size) = entry_size {
-            return Ok(Some(entry_size));
+            return Ok(entry_size);
         }
 
         let inner_type = self.get_type(dwarf)?;
-        if let Some(inner_size) = inner_type.byte_size(dwarf)? {
-            return Ok(Some(inner_size));
-        }
-
-        Ok(None)
+        inner_type.byte_size(dwarf)
     }
 }
 
@@ -682,21 +673,17 @@ impl Const {
         self.location
     }
 
-    pub fn byte_size(&self, dwarf: &Dwarf) -> Result<Option<usize>, Error> {
+    pub fn byte_size(&self, dwarf: &Dwarf) -> Result<usize, Error> {
         let entry_size = dwarf.entry_context(&self.location(), |entry| {
             get_entry_byte_size(entry)
         })?;
 
         if let Some(entry_size) = entry_size {
-            return Ok(Some(entry_size));
+            return Ok(entry_size);
         }
 
         let inner_type = self.get_type(dwarf)?;
-        if let Some(inner_size) = inner_type.byte_size(dwarf)? {
-            return Ok(Some(inner_size));
-        }
-
-        Ok(None)
+        inner_type.byte_size(dwarf)
     }
 }
 
@@ -705,21 +692,17 @@ impl Volatile {
         self.location
     }
 
-    pub fn byte_size(&self, dwarf: &Dwarf) -> Result<Option<usize>, Error> {
+    pub fn byte_size(&self, dwarf: &Dwarf) -> Result<usize, Error> {
         let entry_size = dwarf.entry_context(&self.location(), |entry| {
             get_entry_byte_size(entry)
         })?;
 
         if let Some(entry_size) = entry_size {
-            return Ok(Some(entry_size));
+            return Ok(entry_size);
         }
 
         let inner_type = self.get_type(dwarf)?;
-        if let Some(inner_size) = inner_type.byte_size(dwarf)? {
-            return Ok(Some(inner_size));
-        }
-
-        Ok(None)
+        inner_type.byte_size(dwarf)
     }
 }
 
@@ -728,21 +711,17 @@ impl Restrict {
         self.location
     }
 
-    pub fn byte_size(&self, dwarf: &Dwarf) -> Result<Option<usize>, Error> {
+    pub fn byte_size(&self, dwarf: &Dwarf) -> Result<usize, Error> {
         let entry_size = dwarf.entry_context(&self.location(), |entry| {
             get_entry_byte_size(entry)
         })?;
 
         if let Some(entry_size) = entry_size {
-            return Ok(Some(entry_size));
+            return Ok(entry_size);
         }
 
         let inner_type = self.get_type(dwarf)?;
-        if let Some(inner_size) = inner_type.byte_size(dwarf)? {
-            return Ok(Some(inner_size));
-        }
-
-        Ok(None)
+        inner_type.byte_size(dwarf)
     }
 }
 
@@ -751,16 +730,16 @@ impl Subrange {
         self.location
     }
 
-    pub fn byte_size(&self, dwarf: &Dwarf) -> Result<Option<usize>, Error> {
+    pub fn byte_size(&self, dwarf: &Dwarf) -> Result<usize, Error> {
         let entry_size = dwarf.entry_context(&self.location(), |entry| {
             get_entry_byte_size(entry)
         })?;
 
         if let Some(entry_size) = entry_size {
-            return Ok(Some(entry_size));
+            return Ok(entry_size);
         }
 
-        Ok(None)
+        Err(Error::ByteSizeAttributeError)
     }
 }
 
@@ -807,22 +786,19 @@ impl Array {
     // another weird case of byte_size, we need to get the bound and multiply
     // the bound by the byte_size of the child type if there is no byte size
     // attribute
-    pub fn byte_size(&self, dwarf: &Dwarf) -> Result<Option<usize>, Error> {
+    pub fn byte_size(&self, dwarf: &Dwarf) -> Result<usize, Error> {
         let entry_size = dwarf.entry_context(&self.location(), |entry| {
             get_entry_byte_size(entry)
         })?;
 
         if let Some(entry_size) = entry_size {
-            return Ok(Some(entry_size));
+            return Ok(entry_size);
         }
 
         let inner_type = self.get_type(dwarf)?;
         let bound = self.get_bound(dwarf)?;
-        if let Some(inner_size) = inner_type.byte_size(dwarf)? {
-            return Ok(Some(inner_size * bound));
-        }
-
-        Ok(None)
+        let inner_size = inner_type.byte_size(dwarf)?;
+        Ok(inner_size * bound)
     }
 }
 

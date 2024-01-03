@@ -54,8 +54,7 @@ fn simple_struct() -> anyhow::Result<()> {
     assert!(found.members(&dwarf)?.len() == 1);
 
     let byte_size = found.byte_size(&dwarf)?;
-    assert!(byte_size.is_some());
-    assert!(byte_size.unwrap() == 8);
+    assert!(byte_size == 8);
 
     Ok(())
 }
@@ -85,8 +84,7 @@ fn padded_struct() -> anyhow::Result<()> {
 
     // Expect padding on the int to push the size from 12 to 16
     let byte_size = found.byte_size(&dwarf)?;
-    assert!(byte_size.is_some());
-    assert!(byte_size.unwrap() == 16);
+    assert!(byte_size == 16);
 
     let offsets = found.members(&dwarf)?.into_iter().map(|memb| {
         memb.member_location(&dwarf)
@@ -132,8 +130,7 @@ fn packed_struct() -> anyhow::Result<()> {
 
     // Expect packing to smoosh the long and int against eachother
     let byte_size = found.byte_size(&dwarf)?;
-    assert!(byte_size.is_some());
-    assert!(byte_size.unwrap() == 12);
+    assert!(byte_size == 12);
 
     let offsets = found.members(&dwarf)?.into_iter().map(|memb| {
         memb.member_location(&dwarf)

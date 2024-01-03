@@ -286,12 +286,9 @@ pub fn format_member(dwarf: &Dwarf, member: Member, tablevel: usize,
             formatted.push(' ');
         }
 
-        if let Some(bytesz) = member.byte_size(dwarf)? {
-            formatted.push_str(&format!("\t/* sz: {bytesz: >4} | \
-                                              off: {offset: >4} */"));
-        } else { // probably unreachable?
-            formatted.push_str("\t/* sz:    ? | off: {offset: >4} */")
-        }
+        let bytesz = member.byte_size(dwarf)?;
+        formatted.push_str(&format!("\t/* sz: {bytesz: >4} | \
+                                          off: {offset: >4} */"));
     }
 
     formatted.push('\n');
