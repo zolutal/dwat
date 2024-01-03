@@ -166,7 +166,7 @@ impl MemberType {
             }
             // --- Unsized ---
             MemberType::Subroutine(_) => {
-                Err(Error::ByteSizeAttributeError)
+                Err(Error::ByteSizeAttributeNotFound)
             }
         }
     }
@@ -218,7 +218,7 @@ pub trait NamedType {
         })? {
             Ok(name)
         } else {
-            Err(Error::NameAttributeError)
+            Err(Error::NameAttributeNotFound)
         }
     }
 }
@@ -305,7 +305,7 @@ pub trait InnerType {
                     }
                 };
             };
-            Err(Error::TypeAttributeError)
+            Err(Error::TypeAttributeNotFound)
         })?
     }
 }
@@ -510,7 +510,7 @@ impl Struct {
         let mut repr = String::new();
         match self.name(dwarf) {
             Ok(name) => repr.push_str(&format!("struct {} {{\n", name)),
-            Err(Error::NameAttributeError) => repr.push_str("struct {\n"),
+            Err(Error::NameAttributeNotFound) => repr.push_str("struct {\n"),
             Err(e) => return Err(e)
         };
         let members = self.members(dwarf)?;
@@ -542,7 +542,7 @@ impl Struct {
         }
 
         // This should(?) be unreachable
-        Err(Error::ByteSizeAttributeError)
+        Err(Error::ByteSizeAttributeNotFound)
     }
 
 }
@@ -557,7 +557,7 @@ impl Union {
         let mut repr = String::new();
         match self.name(dwarf) {
             Ok(name) => repr.push_str(&format!("union {} {{\n", name)),
-            Err(Error::NameAttributeError) => repr.push_str("union {\n"),
+            Err(Error::NameAttributeNotFound) => repr.push_str("union {\n"),
             Err(e) => return Err(e)
         };
         let members = self.members(dwarf)?;
@@ -644,7 +644,7 @@ impl Base {
         if let Some(entry_size) = entry_size {
             Ok(entry_size)
         } else {
-            Err(Error::ByteSizeAttributeError)
+            Err(Error::ByteSizeAttributeNotFound)
         }
     }
 }
@@ -739,7 +739,7 @@ impl Subrange {
             return Ok(entry_size);
         }
 
-        Err(Error::ByteSizeAttributeError)
+        Err(Error::ByteSizeAttributeNotFound)
     }
 }
 

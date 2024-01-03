@@ -20,6 +20,7 @@ pub mod prelude {
 /// Error type for parsing/loading DWARF information
 #[derive(thiserror::Error, Debug)]
 pub enum Error {
+    // Fatal
     #[error("failed to load dwarf info from file")]
     DwarfLoadError(String),
 
@@ -32,13 +33,13 @@ pub enum Error {
     #[error("failed when attempting to get some DIE")]
     DIEError(String),
 
-    // Non Fatal
-    #[error("failed when attempting to get a Name Attribute")]
-    NameAttributeError,
+    // Non-Fatal
+    #[error("failure when attempting to find a Name Attribute")]
+    NameAttributeNotFound,
 
-    #[error("failed when attempting to get a Type Attribute")]
-    TypeAttributeError,
+    #[error("failure when attempting to find a Type Attribute")]
+    TypeAttributeNotFound,
 
-    #[error("failed when attempting to get a Type Attribute")]
-    ByteSizeAttributeError,
+    #[error("failure when attempting to find a ByteSize Attribute")]
+    ByteSizeAttributeNotFound,
 }

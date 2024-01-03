@@ -59,7 +59,7 @@ pub fn format_type(dwarf: &Dwarf, member_name: String, typ: MemberType,
                     out.push_str(&format!("struct {name}"));
                     return Ok(out);
                 }
-                Err(Error::NameAttributeError) => {
+                Err(Error::NameAttributeNotFound) => {
                     // reaching here means we hit a nested struct type
                     out.push_str("struct {\n");
                     for memb in t.members(dwarf)?.into_iter() {
@@ -90,7 +90,7 @@ pub fn format_type(dwarf: &Dwarf, member_name: String, typ: MemberType,
                     // TODO: print enum members
                     out.push_str(&format!("enum {name}"));
                 }
-                Err(Error::NameAttributeError) => {
+                Err(Error::NameAttributeNotFound) => {
                     if level == 0 {
                         out.push_str(&format!("enum {member_name}"));
                         return Ok(out)
@@ -114,7 +114,7 @@ pub fn format_type(dwarf: &Dwarf, member_name: String, typ: MemberType,
                     out.push_str(&format!("union {name}"));
                     return Ok(out);
                 }
-                Err(Error::NameAttributeError) => {
+                Err(Error::NameAttributeNotFound) => {
                     out.push_str("union {\n");
                     for memb in u.members(dwarf)?.into_iter() {
                         out.push_str(
@@ -185,7 +185,7 @@ pub fn format_type(dwarf: &Dwarf, member_name: String, typ: MemberType,
                                 level+1, tablevel, verbosity,
                                 base_offset)?
                 },
-                Err(Error::TypeAttributeError) => {
+                Err(Error::TypeAttributeNotFound) => {
                     "void".to_string()
                 },
                 Err(e) => return Err(e)
@@ -213,7 +213,7 @@ pub fn format_type(dwarf: &Dwarf, member_name: String, typ: MemberType,
                                                 base_offset)?;
                     out.push_str(&format!("const {inner_fmt}"));
                 }
-                Err(Error::TypeAttributeError) => {
+                Err(Error::TypeAttributeNotFound) => {
                     out.push_str("const void");
                 }
                 Err(e) => return Err(e)
@@ -248,7 +248,7 @@ pub fn format_member(dwarf: &Dwarf, member: Member, tablevel: usize,
     let mtype = member.get_type(dwarf)?;
     let name = match member.name(dwarf) {
         Ok(name) => name,
-        Err(Error::NameAttributeError) => {
+        Err(Error::NameAttributeNotFound) => {
             // members can be anon structs or unions
             // it would be nice to check for those cases and propogate the error
             // otherwise, but type modifiers would also need to be stripped...
