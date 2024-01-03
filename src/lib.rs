@@ -31,4 +31,14 @@ pub enum Error {
 
     #[error("failed when attempting to get some DIE")]
     DIEError(String),
+
+    // Non Fatal
+    #[error("failed when attempting to get a Name Attribute")]
+    NameAttributeError,
+
+    #[error("failed when attempting to get a Type Attribute")]
+    TypeAttributeError,
+
+    #[error("failed when attempting to get a Type Attribute")]
+    ByteSizeAttributeError,
 }

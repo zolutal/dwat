@@ -109,8 +109,7 @@ pub struct Variable {
 // TODO: Maybe this should be standardized, e.g.: don't hold type_loc?
 #[derive(Clone, Copy, Debug)]
 pub struct Member {
-    pub memb_loc: Location,
-    pub type_loc: Location
+    pub location: Location,
 }
 
 #[derive(Clone, Copy, Debug)]
@@ -167,7 +166,7 @@ impl MemberType {
             }
             // --- Unsized ---
             MemberType::Subroutine(_) => {
-                Ok(None)
+                Err(Error::ByteSizeAttributeError)
             }
         }
     }
@@ -213,10 +212,14 @@ pub trait NamedType {
     // in that case: return Ok(None)
     // Ok(Err(..)) is only returned when something went wrong seeking the
     // member's location
-    fn name(&self, dwarf: &Dwarf) -> Result<Option<String>, Error> {
-        dwarf.entry_context(&self.location(), |entry| {
+    fn name(&self, dwarf: &Dwarf) -> Result<String, Error> {
+        if let Some(name) = dwarf.entry_context(&self.location(), |entry| {
             get_entry_name(dwarf, entry)
-        })
+        })? {
+            Ok(name)
+        } else {
+            Err(Error::NameAttributeError)
+        }
     }
 }
 
@@ -242,6 +245,7 @@ impl_named_type!(Volatile);
 impl_named_type!(Restrict);
 impl_named_type!(Subrange);
 impl_named_type!(Variable);
+impl_named_type!(Member);
 
 
 /// This trait specifies that a type is associated with some DWARF tag
@@ -284,9 +288,9 @@ pub trait InnerType {
     fn location(&self) -> Location;
 
     fn get_type(&self, dwarf: &Dwarf)
-    -> Result<Option<MemberType>, Error> {
+    -> Result<MemberType, Error> {
         dwarf.entry_context(&self.location().clone(), |entry|
-        -> Result<Option<MemberType>, Error> {
+        -> Result<MemberType, Error> {
             let mut attrs = entry.attrs();
             while let Ok(Some(attr)) = attrs.next() {
                 if attr.name() == gimli::DW_AT_type {
@@ -296,12 +300,12 @@ pub trait InnerType {
                             offset,
                         };
                         return dwarf.entry_context(&type_loc, |entry| {
-                            Ok(Some(entry_to_type(type_loc, entry)))
+                            Ok(entry_to_type(type_loc, entry))
                         })?
                     }
                 };
             };
-            Ok(None)
+            Err(Error::TypeAttributeError)
         })?
     }
 }
@@ -326,6 +330,7 @@ impl_inner_type!(Variable);
 impl_inner_type!(Typedef);
 impl_inner_type!(Array);
 impl_inner_type!(Enum);
+impl_inner_type!(Member);
 
 
 fn get_entry_bit_size(entry: &DIE) -> Option<usize> {
@@ -428,55 +433,22 @@ fn entry_to_type(location: Location, entry: &DIE) -> MemberType {
 }
 
 impl Member {
-    pub fn name(&self, dwarf: &Dwarf) -> Result<Option<String>, Error> {
-        dwarf.entry_context(&self.memb_loc, |entry| -> Option<String> {
-            let mut attrs = entry.attrs();
-            while let Ok(Some(attr)) = &attrs.next() {
-                if attr.name() == gimli::DW_AT_name {
-                    match attr.value() {
-                        gimli::AttributeValue::String(str) => {
-                            if let Ok(str) = str.to_string() {
-                                return Some(str.to_string())
-                            }
-                        }
-                        gimli::AttributeValue::DebugStrRef(strref) => {
-                            return from_dbg_str_ref(dwarf, strref)
-                        }
-                        _ => { }
-                    };
-                }
-            }
-            None
-        })
-    }
-
     pub fn bit_size(&self, dwarf: &Dwarf) -> Result<Option<usize>, Error> {
-        dwarf.entry_context(&self.memb_loc, |entry| {
+        dwarf.entry_context(&self.location, |entry| {
             get_entry_bit_size(entry)
         })
     }
 
     pub fn byte_size(&self, dwarf: &Dwarf) -> Result<Option<usize>, Error> {
-        let entry_byte_size = dwarf.entry_context(&self.memb_loc, |entry| {
-            get_entry_byte_size(entry)
-        })?;
-
-        if let Some(bytesz) = entry_byte_size {
-            Ok(Some(bytesz))
-        } else {
-            self.get_type(dwarf)?.byte_size(dwarf)
+        let inner = self.get_type(dwarf)?;
+        if let Some(bytesz) = inner.byte_size(dwarf)? {
+            return Ok(Some(bytesz))
         }
-    }
-
-    // retrieve the type belonging to a member
-    pub fn get_type(&self, dwarf: &Dwarf) -> Result<MemberType, Error> {
-        dwarf.entry_context(&self.type_loc, |entry| {
-            entry_to_type(self.type_loc, entry)
-        })
+        Ok(None)
     }
 
     pub fn member_location(&self, dwarf: &Dwarf) -> Result<Option<usize>, Error> {
-        dwarf.entry_context(&self.memb_loc, |entry| {
+        dwarf.entry_context(&self.location, |entry| {
             let mut attrs = entry.attrs();
             while let Ok(Some(attr)) = &attrs.next() {
                 if attr.name() == gimli::DW_AT_data_member_location {
@@ -488,7 +460,6 @@ impl Member {
             None
         })
     }
-
 }
 
 pub trait HasMembers {
@@ -510,23 +481,11 @@ pub trait HasMembers {
                 if entry.tag() != gimli::DW_TAG_member {
                     break;
                 }
-                let memb_loc = Location {
+                let location = Location {
                     header: self.location().header,
                     offset: entry.offset(),
                 };
-                let mut attrs = entry.attrs();
-                while let Ok(Some(attr)) = attrs.next() {
-                    if attr.name() == gimli::DW_AT_type {
-                        if let AttributeValue::UnitRef(offset) = attr.value() {
-                            let type_loc = Location {
-                                header: self.location().header,
-                                offset,
-                            };
-                            members.push(Member { type_loc, memb_loc });
-                            break;
-                        }
-                    };
-                };
+                members.push(Member { location });
             };
         })?;
         Ok(members)
@@ -552,11 +511,11 @@ impl Struct {
 
     pub fn to_string_verbose(&self, dwarf: &Dwarf, verbosity: u8) -> Result<String, Error> {
         let mut repr = String::new();
-        if let Some(name) =  self.name(dwarf)? {
-            repr.push_str(&format!("struct {} {{\n", name));
-        } else {
-            repr.push_str("struct {\n");
-        }
+        match self.name(dwarf) {
+            Ok(name) => repr.push_str(&format!("struct {} {{\n", name)),
+            Err(Error::NameAttributeError) => repr.push_str("struct {\n"),
+            Err(e) => return Err(e)
+        };
         let members = self.members(dwarf)?;
         for member in members.into_iter() {
             let tab_level = 0;
@@ -604,11 +563,11 @@ impl Union {
     pub fn to_string_verbose(&self, dwarf: &Dwarf, verbosity: u8)
     -> Result<String, Error> {
         let mut repr = String::new();
-        if let Some(name) =  self.name(dwarf)? {
-            repr.push_str(&format!("union {} {{\n", name));
-        } else {
-            repr.push_str("union {\n");
-        }
+        match self.name(dwarf) {
+            Ok(name) => repr.push_str(&format!("union {} {{\n", name)),
+            Err(Error::NameAttributeError) => repr.push_str("union {\n"),
+            Err(e) => return Err(e)
+        };
         let members = self.members(dwarf)?;
         for member in members.into_iter() {
             let tab_level = 0;
@@ -666,16 +625,13 @@ impl Enum {
             return Ok(Some(entry_size));
         }
 
-        if let Some(inner_type) = self.get_type(dwarf)? {
-            return inner_type.byte_size(dwarf);
-        };
-        Ok(None)
+        self.get_type(dwarf)?.byte_size(dwarf)
     }
 }
 
 impl Pointer {
     /// alias for get_type()
-    pub fn deref(&self, dwarf: &Dwarf) -> Result<Option<MemberType>, Error> {
+    pub fn deref(&self, dwarf: &Dwarf) -> Result<MemberType, Error> {
         self.get_type(dwarf)
     }
 
@@ -712,11 +668,10 @@ impl Typedef {
             return Ok(Some(entry_size));
         }
 
-        if let Some(inner_type) = self.get_type(dwarf)? {
-            if let Some(inner_size) = inner_type.byte_size(dwarf)? {
-                return Ok(Some(inner_size));
-            }
-        };
+        let inner_type = self.get_type(dwarf)?;
+        if let Some(inner_size) = inner_type.byte_size(dwarf)? {
+            return Ok(Some(inner_size));
+        }
 
         Ok(None)
     }
@@ -736,11 +691,10 @@ impl Const {
             return Ok(Some(entry_size));
         }
 
-        if let Some(inner_type) = self.get_type(dwarf)? {
-            if let Some(inner_size) = inner_type.byte_size(dwarf)? {
-                return Ok(Some(inner_size));
-            }
-        };
+        let inner_type = self.get_type(dwarf)?;
+        if let Some(inner_size) = inner_type.byte_size(dwarf)? {
+            return Ok(Some(inner_size));
+        }
 
         Ok(None)
     }
@@ -760,11 +714,10 @@ impl Volatile {
             return Ok(Some(entry_size));
         }
 
-        if let Some(inner_type) = self.get_type(dwarf)? {
-            if let Some(inner_size) = inner_type.byte_size(dwarf)? {
-                return Ok(Some(inner_size));
-            }
-        };
+        let inner_type = self.get_type(dwarf)?;
+        if let Some(inner_size) = inner_type.byte_size(dwarf)? {
+            return Ok(Some(inner_size));
+        }
 
         Ok(None)
     }
@@ -784,11 +737,10 @@ impl Restrict {
             return Ok(Some(entry_size));
         }
 
-        if let Some(inner_type) = self.get_type(dwarf)? {
-            if let Some(inner_size) = inner_type.byte_size(dwarf)? {
-                return Ok(Some(inner_size));
-            }
-        };
+        let inner_type = self.get_type(dwarf)?;
+        if let Some(inner_size) = inner_type.byte_size(dwarf)? {
+            return Ok(Some(inner_size));
+        }
 
         Ok(None)
     }
@@ -864,12 +816,11 @@ impl Array {
             return Ok(Some(entry_size));
         }
 
-        if let Some(inner_type) = self.get_type(dwarf)? {
-            let bound = self.get_bound(dwarf)?;
-            if let Some(inner_size) = inner_type.byte_size(dwarf)? {
-                return Ok(Some(inner_size * bound));
-            }
-        };
+        let inner_type = self.get_type(dwarf)?;
+        let bound = self.get_bound(dwarf)?;
+        if let Some(inner_size) = inner_type.byte_size(dwarf)? {
+            return Ok(Some(inner_size * bound));
+        }
 
         Ok(None)
     }
@@ -975,16 +926,16 @@ impl<'a> Dwarf<'a> {
                     if attr.name() == gimli::DW_AT_declaration {
                         continue 'entries
                     }
+                }
 
-                    let location = Location {
-                        header: header_idx,
-                        offset: entry.offset(),
-                    };
+                let location = Location {
+                    header: header_idx,
+                    offset: entry.offset(),
+                };
 
-                    // return if function returns true
-                    if f(entry, location) {
-                        return Ok(())
-                    }
+                // return if function returns true
+                if f(entry, location) {
+                    return Ok(())
                 }
             }
             header_idx += 1;
