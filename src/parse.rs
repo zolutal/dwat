@@ -206,11 +206,6 @@ fn get_entry_name(dwarf: &Dwarf, entry: &DIE) -> Option<String> {
 pub trait NamedType {
     fn location(&self) -> Location;
 
-    // it should be safe to call this on a type that doesn't have a name
-    // just to check if it has a name
-    // in that case: return Ok(None)
-    // Ok(Err(..)) is only returned when something went wrong seeking the
-    // member's location
     fn name(&self, dwarf: &Dwarf) -> Result<String, Error> {
         if let Some(name) = dwarf.entry_context(&self.location(), |entry| {
             get_entry_name(dwarf, entry)
