@@ -106,7 +106,6 @@ pub struct Variable {
 }
 
 /// Represents a field of a struct or union
-// TODO: Maybe this should be standardized, e.g.: don't hold type_loc?
 #[derive(Clone, Copy, Debug)]
 pub struct Member {
     pub location: Location,
