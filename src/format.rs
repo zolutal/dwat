@@ -126,11 +126,11 @@ pub fn format_type(dwarf: &Dwarf, member_name: String, typ: MemberType,
                         out.push_str("    ");
                     }
                     out.push('}');
+
                     return Ok(out);
                 }
                 Err(e) => return Err(e)
             }
-            // reaching here means we hit a nested union type
         },
         MemberType::Base(t) => {
             let name = t.name(dwarf)?;

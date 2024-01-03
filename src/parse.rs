@@ -443,6 +443,7 @@ impl Member {
         inner.byte_size(dwarf)
     }
 
+    /// The byte offset of the member from the start of the datatype
     pub fn member_location(&self, dwarf: &Dwarf) -> Result<usize, Error> {
         let member_location = dwarf.entry_context(&self.location, |entry| {
             let mut attrs = entry.attrs();
@@ -758,6 +759,7 @@ impl Array {
         self.location
     }
 
+    /// The number of items in the array
     pub fn get_bound(&self, dwarf: &Dwarf) -> Result<usize, Error> {
         dwarf.unit_context(&self.location, |unit| {
             let bound = 0;
@@ -793,21 +795,24 @@ impl Array {
         })
     }
 
-    // another weird case of byte_size, we need to get the bound and multiply
-    // the bound by the byte_size of the child type if there is no byte size
-    // attribute
+    /// The size of one array item
+    pub fn entry_size(&self, dwarf: &Dwarf) -> Result<usize, Error> {
+        let inner_type = self.get_type(dwarf)?;
+        inner_type.byte_size(dwarf)
+    }
+
+    /// The memory footprint of the entire array
     pub fn byte_size(&self, dwarf: &Dwarf) -> Result<usize, Error> {
-        let entry_size = dwarf.entry_context(&self.location(), |entry| {
+        let byte_size = dwarf.entry_context(&self.location(), |entry| {
             get_entry_byte_size(entry)
         })?;
 
-        if let Some(entry_size) = entry_size {
-            return Ok(entry_size);
+        if let Some(byte_size) = byte_size {
+            return Ok(byte_size);
         }
 
-        let inner_type = self.get_type(dwarf)?;
+        let inner_size = self.entry_size(dwarf)?;
         let bound = self.get_bound(dwarf)?;
-        let inner_size = inner_type.byte_size(dwarf)?;
         Ok(inner_size * bound)
     }
 }
