@@ -161,8 +161,13 @@ pub fn format_type(dwarf: &Dwarf, member_name: String, typ: MemberType,
             // pointers to subroutines must be handled differently
             if let Ok(MemberType::Subroutine(subp)) = inner {
 
-                // FIXME: get the actual return type
-                let return_type = "void";
+                let return_type = match subp.get_type(dwarf) {
+                    Ok(rtype) => format_type(dwarf, "".to_string(), rtype,
+                                             level+1, tablevel, verbosity,
+                                             base_offset)?,
+                    Err(Error::TypeAttributeNotFound) => "void".to_string(),
+                    Err(e) => return Err(e)
+                };
 
                 let argstr = {
                     format_type(dwarf, "".to_string(),
