@@ -21,7 +21,7 @@ fn main() -> anyhow::Result<()> {
     // then print the union
     for (name, var) in vars.into_iter() {
         let typ = var.get_type(&dwarf)?;
-        if let Some(dwat::MemberType::Union(u)) = typ {
+        if let dwat::MemberType::Union(u) = typ {
             println!("{} : {}", name, u.to_string(&dwarf)?)
         }
     };
