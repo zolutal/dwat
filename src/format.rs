@@ -1,5 +1,4 @@
 //! Formatting methods for type information.
-
 use crate::prelude::*;
 use crate::MemberType;
 use crate::Member;
@@ -301,8 +300,8 @@ pub fn format_member(dwarf: &Dwarf, member: Member, tablevel: usize,
         }
 
         let bytesz = member.byte_size(dwarf)?;
-        formatted.push_str(&format!("\t/* sz: {bytesz: >4} | \
-                                          off: {offset: >4} */"));
+        formatted.push_str(&format!("\t/* {bytesz: >4} | \
+                                          {offset: >4} */"));
     }
 
     formatted.push('\n');

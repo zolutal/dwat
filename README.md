@@ -88,35 +88,35 @@ It is also possible to format structs in a verbose mode:
 ```
 
 
-Which will add offsets and sizes as comments, similar to the default output of pahole:
+Which will add size and offset information, similar to the output of other tools (pahole, gdb, etc...)
 
 ```
 struct ntb_ctrl_regs {
-    u32 partition_status;                       	/* sz:    4 | off:    0 */
-    u32 partition_op;                           	/* sz:    4 | off:    4 */
-    u32 partition_ctrl;                         	/* sz:    4 | off:    8 */
-    u32 bar_setup;                              	/* sz:    4 | off:   12 */
-    u32 bar_error;                              	/* sz:    4 | off:   16 */
-    u16 lut_table_entries;                      	/* sz:    2 | off:   20 */
-    u16 lut_table_offset;                       	/* sz:    2 | off:   22 */
-    u32 lut_error;                              	/* sz:    4 | off:   24 */
-    u16 req_id_table_size;                      	/* sz:    2 | off:   28 */
-    u16 req_id_table_offset;                    	/* sz:    2 | off:   30 */
-    u32 req_id_error;                           	/* sz:    4 | off:   32 */
-    u32 reserved1[7];                           	/* sz:   28 | off:   36 */
+    u32 partition_status;                       	/*     4 |     0 */
+    u32 partition_op;                           	/*     4 |     4 */
+    u32 partition_ctrl;                         	/*     4 |     8 */
+    u32 bar_setup;                              	/*     4 |    12 */
+    u32 bar_error;                              	/*     4 |    16 */
+    u16 lut_table_entries;                      	/*     2 |    20 */
+    u16 lut_table_offset;                       	/*     2 |    22 */
+    u32 lut_error;                              	/*     4 |    24 */
+    u16 req_id_table_size;                      	/*     2 |    28 */
+    u16 req_id_table_offset;                    	/*     2 |    30 */
+    u32 req_id_error;                           	/*     4 |    32 */
+    u32 reserved1[7];                           	/*    28 |    36 */
     struct {
-        u32 ctl;                                	/* sz:    4 | off:   64 */
-        u32 win_size;                           	/* sz:    4 | off:   68 */
-        u64 xlate_addr;                         	/* sz:    8 | off:   72 */
-    } bar_entry[6];                             	/* sz:   96 | off:   64 */
+        u32 ctl;                                	/*     4 |    64 */
+        u32 win_size;                           	/*     4 |    68 */
+        u64 xlate_addr;                         	/*     8 |    72 */
+    } bar_entry[6];                             	/*    96 |    64 */
     struct {
-        u32 win_size;                           	/* sz:    4 | off:  160 */
-        u32 reserved[3];                        	/* sz:   12 | off:  164 */
-    } bar_ext_entry[6];                         	/* sz:   96 | off:  160 */
-    u32 reserved2[192];                         	/* sz:  768 | off:  256 */
-    u32 req_id_table[512];                      	/* sz: 2048 | off: 1024 */
-    u32 reserved3[256];                         	/* sz: 1024 | off: 3072 */
-    u64 lut_entry[512];                         	/* sz: 4096 | off: 4096 */
+        u32 win_size;                           	/*     4 |   160 */
+        u32 reserved[3];                        	/*    12 |   164 */
+    } bar_ext_entry[6];                         	/*    96 |   160 */
+    u32 reserved2[192];                         	/*   768 |   256 */
+    u32 req_id_table[512];                      	/*  2048 |  1024 */
+    u32 reserved3[256];                         	/*  1024 |  3072 */
+    u64 lut_entry[512];                         	/*  4096 |  4096 */
 
     /* total size: 8192 */
 };
