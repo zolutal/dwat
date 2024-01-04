@@ -1,9 +1,13 @@
 //! `dwat` is a library for accessing [DWARF](https://dwarfstd.org/)
 //! (v4/v5) debuging information.
 //!
-//! Currently, functionality is focused on making type information from DWARF
-//! more accessible by providing [pahole](https://github.com/acmel/dwarves)'s
-//! functionality in a library form.
+//! The library is primarily focused on making type information from DWARF more
+//! accessible, enabling quick lookups and enumeration of type related DWARF
+//! information.
+//!
+//! `dwat` also implements formatting methods for pretty pretting structs/unions
+//! similar to the [pahole](https://github.com/acmel/dwarves) utility and the
+//! gdb `ptype` command.
 
 pub mod format;
 pub mod parse;
