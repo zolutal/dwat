@@ -329,9 +329,7 @@ fn get_entry_bit_size(entry: &DIE) -> Option<usize> {
     let mut attrs = entry.attrs();
     while let Ok(Some(attr)) = &attrs.next() {
         if attr.name() == gimli::DW_AT_bit_size {
-            if let gimli::AttributeValue::Udata(v) = attr.value() {
-                return Some(v as usize);
-            }
+            return attr.udata_value().map(|v| v as usize)
         }
     }
     None
@@ -341,13 +339,24 @@ fn get_entry_byte_size(entry: &DIE) -> Option<usize> {
     let mut attrs = entry.attrs();
     while let Ok(Some(attr)) = &attrs.next() {
         if attr.name() == gimli::DW_AT_byte_size {
-            if let gimli::AttributeValue::Udata(v) = attr.value() {
-                return Some(v as usize);
-            }
+            return attr.udata_value().map(|v| v as usize)
         }
     }
     None
 }
+
+// Try to retrieve the alignment attribute if one exists, alignment was added
+// in DWARF 5 but gcc will inlcude it even for -gdwarf-4
+fn get_entry_alignment(entry: &DIE) -> Option<usize> {
+    let mut attrs = entry.attrs();
+    while let Ok(Some(attr)) = &attrs.next() {
+        if attr.name() == gimli::DW_AT_alignment {
+            return attr.udata_value().map(|v| v as usize)
+        }
+    }
+    None
+}
+
 
 impl Subroutine {
     pub fn get_params(&self, dwarf: &Dwarf)
@@ -512,9 +521,106 @@ impl HasMembers for Union {
     }
 }
 
+/// A summary of alignment data for a Struct, used to determine packed and
+/// aligned attributes
+pub struct AlignmentStats {
+    /// A count of gaps, 'holes', in the struct
+    pub nr_holes: usize,
+
+    /// A tuples of (index, hole size)
+    pub hole_positions: Vec<(usize, usize)>,
+
+    /// The sum of unused bytes from holes in the struct
+    pub sum_holes: usize,
+
+    /// The sum of the sizes of members in the struct
+    pub sum_member_size: usize,
+
+    /// The amount of trailing unused bytes
+    pub padding: usize,
+
+    /// The number of times a member was aligned with less than its natural
+    /// alignment, e.g. an 32-bit int was not 4-byte aligned
+    /// (this is currently innacurate, unsure how natural size should be
+    /// determined for structs, potentially needs to be done recursively)
+    pub nr_unnat_alignment: usize,
+
+    byte_size: usize,
+}
+
+impl AlignmentStats {
+    // FIXME: will be incorrect until nr_unnat_alignment is correctly calculated
+    fn is_packed(&self) -> bool {
+        self.nr_unnat_alignment > 0 && self.nr_holes == 0 &&
+            self.sum_member_size + self.padding == self.byte_size
+    }
+}
+
 impl Struct {
     fn location(&self) -> Location {
         self.location
+    }
+
+    fn alignment_stats(&self, dwarf: &Dwarf)
+    -> Result<AlignmentStats, Error> {
+        let mut nr_holes: usize = 0;
+        let mut hole_positions: Vec<(usize, usize)> = Vec::new();
+        let mut sum_holes: usize = 0;
+        let mut sum_member_size: usize = 0;
+        let mut nr_unnat_alignment: usize = 0;
+
+        let mut prev_offset: usize = 0;
+        let mut prev_size: usize = 0;
+        for (idx, member) in self.members(dwarf)?.into_iter().enumerate() {
+            let curr_offset = member.offset(dwarf)?;
+            let curr_size = member.byte_size(dwarf)?;
+
+            sum_member_size = sum_member_size + curr_size;
+
+            // nothing to do for the first member
+            if prev_offset == 0 {
+                prev_offset = curr_offset;
+                prev_size = curr_size;
+                continue
+            }
+
+            // array alignment is based on the entry type size
+            let byte_size_single = match member.get_type(dwarf)? {
+                MemberType::Array(arr) => arr.entry_size(dwarf)?,
+                _ => curr_size
+            };
+
+            // size zero members don't matter
+            if curr_size == 0 || byte_size_single == 0 {
+                continue
+            }
+
+            // calc padding between end of prev type
+            let hole_sz = curr_offset - (prev_size + prev_offset);
+            sum_holes = sum_holes + hole_sz;
+
+            if hole_sz > 0 {
+                nr_holes += 1;
+                hole_positions.push((idx, hole_sz));
+            }
+
+            // if the size is divisible byte the type size, it is naturally
+            // aligned, otherwise some packing likely occurred
+            if curr_offset % byte_size_single != 0 {
+                nr_unnat_alignment = nr_unnat_alignment + 1;
+            }
+
+            prev_offset = curr_offset;
+            prev_size = curr_size;
+        }
+
+        let byte_size = self.byte_size(dwarf)?;
+
+        // check the distance to the end of the struct for padding
+        let padding = byte_size - (prev_size + prev_offset);
+
+        Ok(AlignmentStats { nr_holes, sum_holes, hole_positions, padding,
+                            sum_member_size, nr_unnat_alignment, byte_size })
     }
 
     pub fn to_string_verbose(&self, dwarf: &Dwarf, verbosity: u8) -> Result<String, Error> {
@@ -531,11 +637,27 @@ impl Struct {
             repr.push_str(&format_member(dwarf, member, tab_level,
                                          verbosity, base_offset)?);
         }
+
         if verbosity > 0 {
             let bytesz = self.byte_size(dwarf)?;
             repr.push_str(&format!("\n    /* total size: {} */\n", bytesz));
         }
-        repr.push_str("};");
+        repr.push('}');
+
+        let alignment = match self.alignment(dwarf) {
+            Ok(alignment) => Some(alignment),
+            Err(Error::AlignmentAttributeNotFound) => None,
+            Err(e) => return Err(e)
+        };
+
+        if let Some(alignment) = alignment {
+            repr.push_str(
+                &format!(" __attribute((__aligned__({})))", alignment)
+            )
+        }
+
+        repr.push(';');
+
         Ok(repr)
     }
 
@@ -556,6 +678,17 @@ impl Struct {
         Err(Error::ByteSizeAttributeNotFound)
     }
 
+    pub fn alignment(&self, dwarf: &Dwarf) -> Result<usize, Error> {
+        let alignment = dwarf.entry_context(&self.location(), |entry| {
+            get_entry_alignment(entry)
+        })?;
+
+        if let Some(alignment) = alignment {
+            return Ok(alignment)
+        }
+
+        Err(Error::AlignmentAttributeNotFound)
+    }
 }
 
 impl Union {

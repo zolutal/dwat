@@ -53,4 +53,7 @@ pub enum Error {
 
     #[error("failure when attempting to find a MemberLocation Attribute")]
     MemberLocationAttributeNotFound,
+
+    #[error("failure when attempting to find an Alignment Attribute")]
+    AlignmentAttributeNotFound,
 }
