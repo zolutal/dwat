@@ -172,12 +172,13 @@ impl MemberType {
 // Try to retrieve a string from the debug_str section for a given offset
 pub(crate) fn from_dbg_str_ref(dwarf: &Dwarf, str_ref: DebugStrOffset<usize>)
 -> Option<String> {
-    let dwarf = dwarf.borrow_dwarf();
-    if let Ok(str_ref) = dwarf.debug_str.get_str(str_ref) {
-        let str_ref = str_ref.to_string_lossy();
-        return Some(str_ref.to_string());
-    }
-    None
+    dwarf.borrow_dwarf(|dwarf| {
+        if let Ok(str_ref) = dwarf.debug_str.get_str(str_ref) {
+            let str_ref = str_ref.to_string_lossy();
+            return Some(str_ref.to_string());
+        }
+        None
+    })
 }
 
 // Try to retrieve the name attribute as a string for a DIE if one exists

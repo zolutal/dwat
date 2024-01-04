@@ -3,6 +3,8 @@ use std::{collections::HashMap, borrow::Cow};
 use object::{Object, ObjectSection, ReadRef};
 use fallible_iterator::FallibleIterator;
 use gimli::RunTimeEndian;
+use std::sync::RwLock;
+use std::rc::Rc;
 
 use crate::{DIE, CU, GimliDwarf};
 use crate::get_entry_name;
@@ -10,10 +12,21 @@ use crate::Location;
 use crate::Tagged;
 use crate::Error;
 
+type RwDwarfCow<'a> = Rc<RwLock<gimli::Dwarf<Cow<'a, [u8]>>>>;
+
 /// Represents DWARF data
 pub struct Dwarf<'a> {
-    dwarf_cow: gimli::Dwarf<Cow<'a, [u8]>>,
+    dwarf_cow: RwDwarfCow<'a>,
     endianness: RunTimeEndian
+}
+
+impl<'a> Clone for Dwarf<'a> {
+    fn clone(&self) -> Dwarf<'a> {
+        Dwarf {
+            dwarf_cow: self.dwarf_cow.clone(),
+            endianness: self.endianness
+        }
+    }
 }
 
 impl<'a> Dwarf<'a> {
@@ -36,18 +49,23 @@ impl<'a> Dwarf<'a> {
             }
         };
 
-        // Load all of the sections.
-        let dwarf_cow = gimli::Dwarf::load(&load_section).unwrap();
+        // Load all of the sections
+        let dwarf_cow = Rc::new(RwLock::new(
+                gimli::Dwarf::load(&load_section).unwrap()
+        ));
 
         Ok(Self{dwarf_cow, endianness})
     }
 
-    pub(crate) fn borrow_dwarf(&self) -> GimliDwarf {
-        let borrow_section: &dyn for<'b> Fn(&'b Cow<[u8]>,
-        ) -> gimli::EndianSlice<'b, gimli::RunTimeEndian> =
+    pub(crate) fn borrow_dwarf<F,R>(&self, f: F) -> R
+    where F: FnOnce(&GimliDwarf) -> R {
+        let borrow_section: &dyn for<'b> Fn(&'b Cow<[u8]>)
+        -> gimli::EndianSlice<'b, gimli::RunTimeEndian> =
         &|section| gimli::EndianSlice::new(section, self.endianness);
 
-        self.dwarf_cow.borrow(borrow_section)
+        let binding = self.dwarf_cow.read().unwrap();
+        let dwarf = binding.borrow(borrow_section);
+        f(&dwarf)
     }
 
     pub(crate) fn entry_context<F,R>(&self, loc: &Location, f: F) -> Result<R, Error>
@@ -69,62 +87,64 @@ impl<'a> Dwarf<'a> {
 
     pub(crate) fn unit_context<F,R>(&self, loc: &Location, f: F) -> Result<R, Error>
     where F: FnOnce(&CU) -> R {
-        let dwarf = self.borrow_dwarf();
-        let mut unit_headers = dwarf.units();
-        let unit = if let Ok(Some(header)) = unit_headers.nth(loc.header) {
-            if let Ok(unit) = dwarf.unit(header) {
-                unit
+        self.borrow_dwarf(|dwarf| {
+            let mut unit_headers = dwarf.units();
+            let unit = if let Ok(Some(header)) = unit_headers.nth(loc.header) {
+                if let Ok(unit) = dwarf.unit(header) {
+                    unit
+                } else {
+                    return Err(Error::CUError(
+                        format!("Failed to find CU at location: {:?}", loc)
+                    ));
+                }
             } else {
                 return Err(Error::CUError(
-                    format!("Failed to find CU at location: {:?}", loc)
+                    format!("Failed to find CU header at location: {:?}", loc)
                 ));
-            }
-        } else {
-            return Err(Error::CUError(
-                format!("Failed to find CU header at location: {:?}", loc)
-            ));
-        };
-        Ok(f(&unit))
+            };
+            Ok(f(&unit))
+        })
     }
 
     fn for_each_item<T: Tagged, F>(&self, mut f: F)
     -> Result<(), Error>
     where F: FnMut(&DIE, Location) -> bool {
-        let dwarf = self.borrow_dwarf();
-        let mut header_idx = 0;
-        let mut unit_headers = dwarf.units();
-        while let Ok(Some(header)) = unit_headers.next() {
-            let unit = match dwarf.unit(header) {
-                Ok(unit) => unit,
-                Err(_) => continue
-            };
-            let mut entries = unit.entries();
-            'entries:
-            while let Ok(Some((_delta_depth, entry))) = entries.next_dfs() {
-                if entry.tag() != T::tag() {
-                    continue;
-                }
+        self.borrow_dwarf(|dwarf| {
+            let mut header_idx = 0;
+            let mut unit_headers = dwarf.units();
+            while let Ok(Some(header)) = unit_headers.next() {
+                let unit = match dwarf.unit(header) {
+                    Ok(unit) => unit,
+                    Err(_) => continue
+                };
+                let mut entries = unit.entries();
+                'entries:
+                while let Ok(Some((_delta_depth, entry))) = entries.next_dfs() {
+                    if entry.tag() != T::tag() {
+                        continue;
+                    }
 
-                let mut attrs = entry.attrs();
-                while let Ok(Some(attr)) = attrs.next() {
-                    if attr.name() == gimli::DW_AT_declaration {
-                        continue 'entries
+                    let mut attrs = entry.attrs();
+                    while let Ok(Some(attr)) = attrs.next() {
+                        if attr.name() == gimli::DW_AT_declaration {
+                            continue 'entries
+                        }
+                    }
+
+                    let location = Location {
+                        header: header_idx,
+                        offset: entry.offset(),
+                    };
+
+                    // return if function returns true
+                    if f(entry, location) {
+                        return Ok(())
                     }
                 }
-
-                let location = Location {
-                    header: header_idx,
-                    offset: entry.offset(),
-                };
-
-                // return if function returns true
-                if f(entry, location) {
-                    return Ok(())
-                }
+                header_idx += 1;
             }
-            header_idx += 1;
-        }
-        Ok(())
+            Ok(())
+        })
     }
 
     pub fn lookup_item<T: Tagged>(&mut self, name: String)
