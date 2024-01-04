@@ -15,7 +15,7 @@ pub(crate) type GimliDwarf<'a> = gimli::Dwarf<R<'a>>;
 /// Represents a location of some type/tag in the DWARF information
 #[derive(Copy, Clone, Debug, PartialEq, Eq)]
 pub struct Location {
-    pub header: usize,
+    pub header: gimli::DebugInfoOffset,
     pub offset: gimli::UnitOffset,
 }
 

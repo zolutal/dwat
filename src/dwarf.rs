@@ -88,20 +88,15 @@ impl<'a> Dwarf<'a> {
     pub(crate) fn unit_context<F,R>(&self, loc: &Location, f: F) -> Result<R, Error>
     where F: FnOnce(&CU) -> R {
         self.borrow_dwarf(|dwarf| {
-            let mut unit_headers = dwarf.units();
-            let unit = if let Ok(Some(header)) = unit_headers.nth(loc.header) {
-                if let Ok(unit) = dwarf.unit(header) {
-                    unit
-                } else {
-                    return Err(Error::CUError(
-                        format!("Failed to find CU at location: {:?}", loc)
-                    ));
-                }
-            } else {
-                return Err(Error::CUError(
-                    format!("Failed to find CU header at location: {:?}", loc)
-                ));
+            let debug_info = dwarf.debug_info;
+            let unit_header = match debug_info.header_from_offset(loc.header) {
+                Ok(header) => header,
+                Err(e) => return Err(
+                    Error::CUError(
+                        format!("Failed to seek to UnitHeader, error: {}", e)
+                    ))
             };
+            let unit = gimli::Unit::new(dwarf, unit_header).unwrap();
             Ok(f(&unit))
         })
     }
@@ -110,8 +105,7 @@ impl<'a> Dwarf<'a> {
     -> Result<(), Error>
     where F: FnMut(&DIE, Location) -> bool {
         self.borrow_dwarf(|dwarf| {
-            let mut header_idx = 0;
-            let mut unit_headers = dwarf.units();
+            let mut unit_headers = dwarf.debug_info.units();
             while let Ok(Some(header)) = unit_headers.next() {
                 let unit = match dwarf.unit(header) {
                     Ok(unit) => unit,
@@ -131,8 +125,15 @@ impl<'a> Dwarf<'a> {
                         }
                     }
 
+                    let header_offset =
+                        match header.offset().as_debug_info_offset() {
+                            Some(offset) => offset,
+                            // should be unreachable
+                            None => return Err(Error::HeaderOffsetError)
+                    };
+
                     let location = Location {
-                        header: header_idx,
+                        header: header_offset,
                         offset: entry.offset(),
                     };
 
@@ -141,7 +142,6 @@ impl<'a> Dwarf<'a> {
                         return Ok(())
                     }
                 }
-                header_idx += 1;
             }
             Ok(())
         })

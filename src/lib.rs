@@ -29,6 +29,9 @@ pub enum Error {
     #[error("object failed to parse file")]
     ObjectError(#[from] object::Error),
 
+    #[error("failed when attempting to get offset of a UnitHeader")]
+    HeaderOffsetError,
+
     #[error("failed when attempting to get some CU")]
     CUError(String),
 
