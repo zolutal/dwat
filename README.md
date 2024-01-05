@@ -48,34 +48,34 @@ This is the result for the `ntb_ctrl_regs` struct found in the Linux kernel whic
 ```
 ┌──(zolutal@ubuntu)-[~/repos/dwat]
 └─$ cargo run --release --example=lookup ntb_ctrl_regs ./vmlinux
-    Finished release [optimized] target(s) in 0.03s
-     Running `target/release/examples/lookup ntb_ctrl_regs ./vmlinux`
+Finished release [optimized] target(s) in 0.01s
+ Running `target/release/examples/lookup ntb_ctrl_regs ./vmlinux`
 struct ntb_ctrl_regs {
-        u32 partition_status;
-        u32 partition_op;
-        u32 partition_ctrl;
-        u32 bar_setup;
-        u32 bar_error;
-        u16 lut_table_entries;
-        u16 lut_table_offset;
-        u32 lut_error;
-        u16 req_id_table_size;
-        u16 req_id_table_offset;
-        u32 req_id_error;
-        u32 reserved1[7];
-        struct {
-                u32 ctl;
-                u32 win_size;
-                u64 xlate_addr;
-        } bar_entry[6];
-        struct {
-                u32 win_size;
-                u32 reserved[3];
-        } bar_ext_entry[6];
-        u32 reserved2[192];
-        u32 req_id_table[];
-        u32 reserved3[256];
-        u64 lut_entry[];
+    u32 partition_status;
+    u32 partition_op;
+    u32 partition_ctrl;
+    u32 bar_setup;
+    u32 bar_error;
+    u16 lut_table_entries;
+    u16 lut_table_offset;
+    u32 lut_error;
+    u16 req_id_table_size;
+    u16 req_id_table_offset;
+    u32 req_id_error;
+    u32 reserved1[7];
+    struct {
+        u32 ctl;
+        u32 win_size;
+        u64 xlate_addr;
+    } bar_entry[6];
+    struct {
+        u32 win_size;
+        u32 reserved[3];
+    } bar_ext_entry[6];
+    u32 reserved2[192];
+    u32 req_id_table[512];
+    u32 reserved3[256];
+    u64 lut_entry[512];
 };
 ```
 
