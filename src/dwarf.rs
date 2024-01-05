@@ -12,21 +12,10 @@ use crate::Location;
 use crate::Tagged;
 use crate::Error;
 
-type RwDwarfCow<'a> = Rc<RwLock<gimli::Dwarf<Cow<'a, [u8]>>>>;
-
 /// Represents DWARF data
 pub struct Dwarf<'a> {
-    dwarf_cow: RwDwarfCow<'a>,
+    dwarf_cow: gimli::Dwarf<Cow<'a, [u8]>>,
     endianness: RunTimeEndian
-}
-
-impl<'a> Clone for Dwarf<'a> {
-    fn clone(&self) -> Dwarf<'a> {
-        Dwarf {
-            dwarf_cow: self.dwarf_cow.clone(),
-            endianness: self.endianness
-        }
-    }
 }
 
 impl<'a> Dwarf<'a> {
@@ -50,9 +39,7 @@ impl<'a> Dwarf<'a> {
         };
 
         // Load all of the sections
-        let dwarf_cow = Rc::new(RwLock::new(
-                gimli::Dwarf::load(&load_section).unwrap()
-        ));
+        let dwarf_cow = gimli::Dwarf::load(&load_section).unwrap();
 
         Ok(Self{dwarf_cow, endianness})
     }
@@ -63,8 +50,7 @@ impl<'a> Dwarf<'a> {
         -> gimli::EndianSlice<'b, gimli::RunTimeEndian> =
         &|section| gimli::EndianSlice::new(section, self.endianness);
 
-        let binding = self.dwarf_cow.read().unwrap();
-        let dwarf = binding.borrow(borrow_section);
+        let dwarf = self.dwarf_cow.borrow(borrow_section);
         f(&dwarf)
     }
 
