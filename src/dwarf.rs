@@ -1,10 +1,7 @@
 //! Loading of DWARF information
 use std::{collections::HashMap, borrow::Cow};
 use object::{Object, ObjectSection, ReadRef};
-use fallible_iterator::FallibleIterator;
 use gimli::RunTimeEndian;
-use std::sync::RwLock;
-use std::rc::Rc;
 
 use crate::{DIE, CU, GimliDwarf};
 use crate::get_entry_name;
@@ -52,39 +49,6 @@ impl<'a> Dwarf<'a> {
 
         let dwarf = self.dwarf_cow.borrow(borrow_section);
         f(&dwarf)
-    }
-
-    pub(crate) fn entry_context<F,R>(&self, loc: &Location, f: F) -> Result<R, Error>
-    where F: FnOnce(&DIE) -> R {
-        self.unit_context(loc, |unit| -> Result<R, Error> {
-            let entry = match unit.entry(loc.offset) {
-                Ok(entry) => entry,
-                Err(_) => {
-                    return Err(
-                        Error::DIEError(
-                            format!("Failed to find DIE at location: {loc:?}")
-                        )
-                    );
-                }
-            };
-            Ok(f(&entry))
-        })?
-    }
-
-    pub(crate) fn unit_context<F,R>(&self, loc: &Location, f: F) -> Result<R, Error>
-    where F: FnOnce(&CU) -> R {
-        self.borrow_dwarf(|dwarf| {
-            let debug_info = dwarf.debug_info;
-            let unit_header = match debug_info.header_from_offset(loc.header) {
-                Ok(header) => header,
-                Err(e) => return Err(
-                    Error::CUError(
-                        format!("Failed to seek to UnitHeader, error: {}", e)
-                    ))
-            };
-            let unit = gimli::Unit::new(dwarf, unit_header).unwrap();
-            Ok(f(&unit))
-        })
     }
 
     fn for_each_item<T: Tagged, F>(&self, mut f: F)
@@ -174,3 +138,73 @@ impl<'a> Dwarf<'a> {
         Ok(items)
     }
 }
+
+/// General functions for getting a CU/DIE from either a Dwarf or CU object
+/// if possible, since type information does not cross CUs its best for perf to
+/// use Dwarf.unit_context to obtain a CU once and pass that CU to the 'u_'
+// variants of the parsing methods as many times as necessary
+pub(crate) trait DwarfContext {
+    fn entry_context<F,R>(&self, loc: &Location, f: F) -> Result<R, Error>
+    where F: FnOnce(&DIE) -> R;
+
+    fn unit_context<F,R>(&self, loc: &Location, f: F) -> Result<R, Error>
+    where F: FnOnce(&CU) -> R;
+}
+
+impl DwarfContext for Dwarf<'_> {
+    fn entry_context<F,R>(&self, loc: &Location, f: F) -> Result<R, Error>
+    where F: FnOnce(&DIE) -> R {
+        self.unit_context(loc, |unit| -> Result<R, Error> {
+            let entry = match unit.entry(loc.offset) {
+                Ok(entry) => entry,
+                Err(_) => {
+                    return Err(
+                        Error::DIEError(
+                            format!("Failed to find DIE at location: {loc:?}")
+                        )
+                    );
+                }
+            };
+            Ok(f(&entry))
+        })?
+    }
+
+    fn unit_context<F,R>(&self, loc: &Location, f: F) -> Result<R, Error>
+    where F: FnOnce(&CU) -> R {
+        self.borrow_dwarf(|dwarf| {
+            let debug_info = dwarf.debug_info;
+            let unit_header = match debug_info.header_from_offset(loc.header) {
+                Ok(header) => header,
+                Err(e) => return Err(
+                    Error::CUError(
+                        format!("Failed to seek to UnitHeader, error: {}", e)
+                    ))
+            };
+            let unit = gimli::Unit::new(dwarf, unit_header).unwrap();
+            Ok(f(&unit))
+        })
+    }
+}
+
+impl DwarfContext for CU<'_> {
+    fn entry_context<F,R>(&self, loc: &Location, f: F) -> Result<R, Error>
+    where F: FnOnce(&DIE) -> R {
+        let entry = match self.entry(loc.offset) {
+            Ok(entry) => entry,
+            Err(_) => {
+                return Err(
+                    Error::DIEError(
+                        format!("Failed to find DIE at location: {loc:?}")
+                    )
+                );
+            }
+        };
+        Ok(f(&entry))
+    }
+
+    fn unit_context<F,R>(&self, _loc: &Location, f: F) -> Result<R, Error>
+    where F: FnOnce(&CU) -> R {
+        Ok(f(self))
+    }
+}
+

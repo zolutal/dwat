@@ -1,19 +1,22 @@
 //! Formatting methods for type information.
-use crate::prelude::*;
+use crate::parse::unit_has_members::UnitHasMembers;
+use crate::parse::unit_inner_type::UnitInnerType;
+use crate::parse::unit_name_type::UnitNamedType;
+use crate::parse::CU;
 use crate::MemberType;
 use crate::Member;
 use crate::Dwarf;
 use crate::Error;
 
-pub fn format_type(dwarf: &Dwarf, member_name: String, typ: MemberType,
-                   level: usize, tablevel: usize, verbosity: u8,
-                   base_offset: usize)
+pub fn format_type(dwarf: &Dwarf, unit: &CU, member_name: String,
+                   typ: MemberType, level: usize, tablevel: usize,
+                   verbosity: u8, base_offset: usize)
 -> Result<String, Error> {
     let mut out = String::new();
     match typ {
         MemberType::Array(a) => {
-            let inner = a.get_type(dwarf)?;
-            let inner_fmt = format_type(dwarf, "".to_string(), inner,
+            let inner = a.u_get_type(unit)?;
+            let inner_fmt = format_type(dwarf, unit, "".to_string(), inner,
                                         level+1, tablevel, verbosity,
                                         base_offset)?;
             out.push_str(&inner_fmt);
@@ -24,7 +27,7 @@ pub fn format_type(dwarf: &Dwarf, member_name: String, typ: MemberType,
                 out.push_str(&member_name);
             }
 
-            let bound = a.get_bound(dwarf)?;
+            let bound = a.u_get_bound(unit)?;
             let bound_str = {
                 if bound == 0 {
                     String::from("[]")
@@ -36,7 +39,7 @@ pub fn format_type(dwarf: &Dwarf, member_name: String, typ: MemberType,
             return Ok(out);
         }
         MemberType::Typedef(t) => {
-            let name = t.name(dwarf)?;
+            let name = t.u_name(dwarf, unit)?;
             if level == 0 {
                 out.push_str(
                     &format!("{name} {member_name}")
@@ -46,7 +49,7 @@ pub fn format_type(dwarf: &Dwarf, member_name: String, typ: MemberType,
             out.push_str(&name);
         },
         MemberType::Struct(t) => {
-            let name = t.name(dwarf);
+            let name = t.u_name(dwarf, unit);
             match name {
                 Ok(name) => {
                     if level == 0 {
@@ -61,9 +64,9 @@ pub fn format_type(dwarf: &Dwarf, member_name: String, typ: MemberType,
                 Err(Error::NameAttributeNotFound) => {
                     // reaching here means we hit a nested struct type
                     out.push_str("struct {\n");
-                    for memb in t.members(dwarf)?.into_iter() {
+                    for memb in t.u_members(unit)?.into_iter() {
                         out.push_str(
-                            &format_member(dwarf, memb, tablevel+1,
+                            &format_member(dwarf, unit, memb, tablevel+1,
                                            verbosity, base_offset)?
                         );
                     }
@@ -78,7 +81,7 @@ pub fn format_type(dwarf: &Dwarf, member_name: String, typ: MemberType,
             }
         },
         MemberType::Enum(t) => {
-            match t.name(dwarf) {
+            match t.u_name(dwarf, unit) {
                 Ok(name) => {
                     if level == 0 {
                         out.push_str(
@@ -101,7 +104,7 @@ pub fn format_type(dwarf: &Dwarf, member_name: String, typ: MemberType,
             }
         },
         MemberType::Union(u) => {
-            let name = u.name(dwarf);
+            let name = u.u_name(dwarf, unit);
             match name {
                 Ok(name) => {
                     if level == 0 {
@@ -115,9 +118,9 @@ pub fn format_type(dwarf: &Dwarf, member_name: String, typ: MemberType,
                 }
                 Err(Error::NameAttributeNotFound) => {
                     out.push_str("union {\n");
-                    for memb in u.members(dwarf)?.into_iter() {
+                    for memb in u.u_members(unit)?.into_iter() {
                         out.push_str(
-                            &format_member(dwarf, memb, tablevel+1,
+                            &format_member(dwarf, unit, memb, tablevel+1,
                                            verbosity, base_offset)?);
                     }
 
@@ -132,7 +135,7 @@ pub fn format_type(dwarf: &Dwarf, member_name: String, typ: MemberType,
             }
         },
         MemberType::Base(t) => {
-            let name = t.name(dwarf)?;
+            let name = t.u_name(dwarf, unit)?;
             if level == 0 {
                 out.push_str(&format!("{name} {member_name}"));
                 return Ok(out);
@@ -142,26 +145,26 @@ pub fn format_type(dwarf: &Dwarf, member_name: String, typ: MemberType,
         },
         MemberType::Subroutine(t) => {
             // just return comma separated arg string
-            let params = t.get_params(dwarf)?;
+            let params = t.u_get_params(unit)?;
             for pidx in 0..params.len() {
-                let param = params[pidx].get_type(dwarf)?;
+                let param = params[pidx].u_get_type(unit)?;
                 // recursively convert type to string
-                out.push_str(&format_type(dwarf, "".to_string(),
-                             param, level+1, tablevel, verbosity,
-                             base_offset)?);
+                out.push_str(&format_type(dwarf, unit, "".to_string(),
+                                          param, level+1, tablevel, verbosity,
+                                          base_offset)?);
                 if pidx != params.len()-1 {
                     out.push_str(", ");
                 }
             };
         },
         MemberType::Pointer(p) => {
-            let inner = p.deref(dwarf);
+            let inner = p.u_get_type(unit);
 
             // pointers to subroutines must be handled differently
             if let Ok(MemberType::Subroutine(subp)) = inner {
 
-                let return_type = match subp.get_type(dwarf) {
-                    Ok(rtype) => format_type(dwarf, "".to_string(), rtype,
+                let return_type = match subp.u_get_type(unit) {
+                    Ok(rtype) => format_type(dwarf, unit, "".to_string(), rtype,
                                              level+1, tablevel, verbosity,
                                              base_offset)?,
                     Err(Error::TypeAttributeNotFound) => "void".to_string(),
@@ -169,7 +172,7 @@ pub fn format_type(dwarf: &Dwarf, member_name: String, typ: MemberType,
                 };
 
                 let argstr = {
-                    format_type(dwarf, "".to_string(),
+                    format_type(dwarf, unit, "".to_string(),
                                 MemberType::Subroutine(subp),
                                 level+1, tablevel, verbosity,
                                 base_offset)?
@@ -185,7 +188,7 @@ pub fn format_type(dwarf: &Dwarf, member_name: String, typ: MemberType,
 
             let ptr_type = match inner {
                 Ok(inner) => {
-                    format_type(dwarf, "".to_string(), inner,
+                    format_type(dwarf, unit, "".to_string(), inner,
                                 level+1, tablevel, verbosity,
                                 base_offset)?
                 },
@@ -209,12 +212,12 @@ pub fn format_type(dwarf: &Dwarf, member_name: String, typ: MemberType,
             return Ok(out);
         },
         MemberType::Const(c) => {
-            let inner = c.get_type(dwarf);
+            let inner = c.u_get_type(unit);
             match inner {
                 Ok(inner) => {
-                    let inner_fmt = format_type(dwarf, "".to_string(), inner,
-                                                level+1, tablevel, verbosity,
-                                                base_offset)?;
+                    let inner_fmt = format_type(dwarf, unit, "".to_string(),
+                                                inner, level+1, tablevel,
+                                                verbosity, base_offset)?;
                     out.push_str(&format!("const {inner_fmt}"));
                 }
                 Err(Error::TypeAttributeNotFound) => {
@@ -224,18 +227,18 @@ pub fn format_type(dwarf: &Dwarf, member_name: String, typ: MemberType,
             }
         },
         MemberType::Volatile(c) => {
-            let inner = c.get_type(dwarf)?;
-            let inner_fmt = format_type(dwarf, "".to_string(), inner,
-                                             level+1, tablevel, verbosity,
-                                             base_offset)?;
+            let inner = c.u_get_type(unit)?;
+            let inner_fmt = format_type(dwarf, unit, "".to_string(), inner,
+                                        level+1, tablevel, verbosity,
+                                        base_offset)?;
             out.push_str(&format!("volatile {inner_fmt}"));
             return Ok(out);
         },
         MemberType::Restrict(c) => {
-            let inner = c.get_type(dwarf)?;
-            let inner_fmt = format_type(dwarf, "".to_string(), inner,
-                                             level+1, tablevel, verbosity,
-                                             base_offset)?;
+            let inner = c.u_get_type(unit)?;
+            let inner_fmt = format_type(dwarf, unit, "".to_string(), inner,
+                                        level+1, tablevel, verbosity,
+                                        base_offset)?;
             out.push_str(&format!("{inner_fmt} restrict"));
             return Ok(out);
         },
@@ -246,11 +249,11 @@ pub fn format_type(dwarf: &Dwarf, member_name: String, typ: MemberType,
     Ok(out)
 }
 
-pub fn format_member(dwarf: &Dwarf, member: Member, tablevel: usize,
+pub fn format_member(dwarf: &Dwarf, unit: &CU, member: Member, tablevel: usize,
                      verbosity: u8, base_offset: usize)
 -> Result<String, Error> {
-    let mtype = member.get_type(dwarf)?;
-    let name = match member.name(dwarf) {
+    let mtype = member.u_get_type(unit)?;
+    let name = match member.u_name(dwarf, unit) {
         Ok(name) => name,
         Err(Error::NameAttributeNotFound) => {
             // members can be anon structs or unions
@@ -267,7 +270,7 @@ pub fn format_member(dwarf: &Dwarf, member: Member, tablevel: usize,
         formatted.push_str("    ");
     }
 
-    let memb_offset = match member.offset(dwarf) {
+    let memb_offset = match member.u_offset(unit) {
         Ok(memb_offset) => memb_offset,
         Err(Error::MemberLocationAttributeNotFound) => 0,
         Err(e) => return Err(e)
@@ -276,10 +279,10 @@ pub fn format_member(dwarf: &Dwarf, member: Member, tablevel: usize,
     let offset = base_offset + memb_offset;
 
     formatted.push_str(
-        &format_type(dwarf, name, mtype, 0, tablevel, verbosity, offset)?
+        &format_type(dwarf, unit, name, mtype, 0, tablevel, verbosity, offset)?
     );
 
-    match member.bit_size(dwarf) {
+    match member.u_bit_size(unit) {
         Ok(bitsz) => {
             formatted.push_str(&format!(":{bitsz}"));
         }
@@ -299,7 +302,7 @@ pub fn format_member(dwarf: &Dwarf, member: Member, tablevel: usize,
             formatted.push(' ');
         }
 
-        let bytesz = member.byte_size(dwarf)?;
+        let bytesz = member.u_byte_size(unit)?;
         formatted.push_str(&format!("\t/* {bytesz: >4} | \
                                           {offset: >4} */"));
     }
