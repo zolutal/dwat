@@ -20,7 +20,7 @@ fn main() -> anyhow::Result<()> {
 
     let file = File::open(path).unwrap();
     let mmap = unsafe { Mmap::map(&file) }.unwrap();
-    let mut dwarf = Dwarf::parse(&*mmap)?;
+    let mut dwarf = Dwarf::load(&*mmap)?;
 
     // some good test cases:
     // compat_rusage
@@ -30,7 +30,7 @@ fn main() -> anyhow::Result<()> {
     // mca_config
     // ntb_ctrl_regs
 
-    let found = dwarf.lookup_item::<dwat::Struct>(struct_name)?;
+    let found = dwarf.lookup_type::<dwat::Struct>(struct_name)?;
     if let Some(found) = found {
         println!("{}", found.to_string_verbose(&dwarf, verbosity)?);
     }

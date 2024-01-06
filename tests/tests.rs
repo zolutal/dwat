@@ -45,9 +45,9 @@ fn simple_struct() -> anyhow::Result<()> {
 
     let file = File::open(&path)?;
     let mmap = unsafe { Mmap::map(&file) }?;
-    let mut dwarf = Dwarf::parse(&*mmap)?;
+    let mut dwarf = Dwarf::load(&*mmap)?;
 
-    let found = dwarf.lookup_item::<dwat::Struct>("simple".to_string())?;
+    let found = dwarf.lookup_type::<dwat::Struct>("simple".to_string())?;
     assert!(found.is_some());
 
     let found = found.unwrap();
@@ -74,9 +74,9 @@ fn padded_struct() -> anyhow::Result<()> {
 
     let file = File::open(&path)?;
     let mmap = unsafe { Mmap::map(&file) }?;
-    let mut dwarf = Dwarf::parse(&*mmap)?;
+    let mut dwarf = Dwarf::load(&*mmap)?;
 
-    let found = dwarf.lookup_item::<dwat::Struct>("padded".to_string())?;
+    let found = dwarf.lookup_type::<dwat::Struct>("padded".to_string())?;
     assert!(found.is_some());
 
     let found = found.unwrap();
@@ -120,9 +120,9 @@ fn packed_struct() -> anyhow::Result<()> {
 
     let file = File::open(&path)?;
     let mmap = unsafe { Mmap::map(&file) }?;
-    let mut dwarf = Dwarf::parse(&*mmap)?;
+    let mut dwarf = Dwarf::load(&*mmap)?;
 
-    let found = dwarf.lookup_item::<dwat::Struct>("packed".to_string())?;
+    let found = dwarf.lookup_type::<dwat::Struct>("packed".to_string())?;
     assert!(found.is_some());
 
     let found = found.unwrap();

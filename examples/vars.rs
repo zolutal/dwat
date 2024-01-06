@@ -13,9 +13,9 @@ fn main() -> anyhow::Result<()> {
 
     let file = File::open(path).unwrap();
     let mmap = unsafe { Mmap::map(&file) }?;
-    let dwarf = Dwarf::parse(&*mmap)?;
+    let dwarf = Dwarf::load(&*mmap)?;
 
-    let vars = dwarf.get_named_items::<dwat::Variable>()?;
+    let vars = dwarf.get_named_types::<dwat::Variable>()?;
 
     // find all variables that are of type union
     // then print the union

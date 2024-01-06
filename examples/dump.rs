@@ -14,12 +14,12 @@ fn main() -> anyhow::Result<()> {
     let file = File::open(path)?;
     let mmap = unsafe { Mmap::map(&file) }?;
 
-    let dwarf = Dwarf::parse(&*mmap)?;
-    let struct_map = dwarf.get_named_items_map::<dwat::Struct>()?;
+    let dwarf = Dwarf::load(&*mmap)?;
+    let struct_map = dwarf.get_fg_named_structs_map()?;
 
-    for (name, dwstruct) in struct_map.into_iter() {
-        let members = dwstruct.members(&dwarf)?;
-        println!("{}\t{}", name, members.len());
+    for (key, struc) in struct_map.into_iter() {
+        let members = struc.members(&dwarf)?.len();
+        println!("{}\t{}", key.name, members);
     };
 
     Ok(())
