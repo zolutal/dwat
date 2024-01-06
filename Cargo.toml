@@ -16,6 +16,7 @@ memmap2 = { version = "0.5.5" }
 fallible-iterator = { version = "0.2", default-features = false, optional = true }
 object = { version = "0.30.0", default-features = false, features = ["read"], optional = true }
 smallvec = { version = "1", default-features = false, optional = true }
+clap = { version = "4.2", features = ["derive"] }
 thiserror = "1.0.50"
 anyhow = "1.0.75"
 tempfile = "3.8.1"
