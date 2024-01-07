@@ -3,8 +3,8 @@ use std::{collections::HashMap, borrow::Cow};
 use object::{Object, ObjectSection, ReadRef};
 use gimli::RunTimeEndian;
 
-use crate::parse::unit_has_members::UnitHasMembers;
-use crate::parse::unit_name_type::UnitNamedType;
+use crate::unit_has_members::UnitHasMembers;
+use crate::unit_name_type::UnitNamedType;
 use crate::{DIE, CU, GimliDwarf};
 use crate::get_entry_name;
 use crate::Location;

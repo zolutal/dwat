@@ -1,10 +1,11 @@
-//! Parse DWARF debugging information
+//! Interfaces representing DWARF type information
+
 use gimli::{RunTimeEndian, DebugStrOffset};
 use gimli::AttributeValue;
 
-use crate::parse::unit_has_members::UnitHasMembers;
-use crate::parse::unit_inner_type::UnitInnerType;
-use crate::parse::unit_name_type::UnitNamedType;
+use crate::types::unit_has_members::UnitHasMembers;
+use crate::types::unit_inner_type::UnitInnerType;
+use crate::types::unit_name_type::UnitNamedType;
 use crate::dwarf::DwarfContext;
 use crate::format::format_member;
 use crate::Dwarf;
@@ -250,7 +251,7 @@ pub(crate) fn get_entry_name(dwarf: &Dwarf, entry: &DIE) -> Option<String> {
 
 /// force UnitNamedType trait to be private
 pub(crate) mod unit_name_type {
-    use crate::parse::*;
+    use crate::types::*;
     use crate::Error;
 
     /// Public crate trait backing NamedType
@@ -340,7 +341,7 @@ impl_tagged_type!(Variable, gimli::DW_TAG_variable);
 
 /// force UnitInnerType trait to be private
 pub(crate) mod unit_inner_type {
-    use crate::parse::*;
+    use crate::types::*;
     use crate::Error;
 
     pub trait UnitInnerType {
@@ -593,7 +594,7 @@ impl Member {
 
 /// prevent UnitHasMembers trait from being usable outside of the library
 pub(crate) mod unit_has_members {
-    use crate::parse::*;
+    use crate::types::*;
     use crate::Error;
 
     pub trait UnitHasMembers {

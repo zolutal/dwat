@@ -1,12 +1,12 @@
 //! Formatting methods for type information.
-use crate::parse::unit_has_members::UnitHasMembers;
-use crate::parse::unit_inner_type::UnitInnerType;
-use crate::parse::unit_name_type::UnitNamedType;
-use crate::parse::CU;
+use crate::unit_has_members::UnitHasMembers;
+use crate::unit_inner_type::UnitInnerType;
+use crate::unit_name_type::UnitNamedType;
 use crate::MemberType;
 use crate::Member;
 use crate::Dwarf;
 use crate::Error;
+use crate::CU;
 
 pub fn format_type(dwarf: &Dwarf, unit: &CU, member_name: String,
                    typ: MemberType, level: usize, tablevel: usize,

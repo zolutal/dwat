@@ -10,17 +10,17 @@
 //! gdb `ptype` command.
 
 pub mod format;
-pub mod parse;
+pub mod types;
 pub mod dwarf;
 
 pub use dwarf::Dwarf;
-pub use parse::*;
+pub use types::*;
 
 pub mod prelude {
     //! Re-exports commonly needed traits
-    pub use super::parse::NamedType;
-    pub use super::parse::InnerType;
-    pub use super::parse::HasMembers;
+    pub use super::types::NamedType;
+    pub use super::types::InnerType;
+    pub use super::types::HasMembers;
 }
 
 /// Error type for parsing/loading DWARF information
