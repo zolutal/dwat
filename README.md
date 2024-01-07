@@ -17,22 +17,19 @@ My focus so far has been on making the type information (specifically structs) p
 
 There are several examples in the `examples` directory, the following will roughly describe the `lookup` example.
 
----
-
-
-The first step of using the library is to load the file containing DWARF info into memory, and then invoke `Dwarf::parse`:
+The first step of using the library is to load the file containing DWARF info into memory, then invoke `Dwarf::load`:
 
 ```rust
     let file = File::open(path)?;
     let mmap = unsafe { Mmap::map(&file) }?;
 
-    let dwarf = Dwarf::parse(&*mmap)?;
+    let dwarf = Dwarf::load(&*mmap)?;
 ```
 
 The dwarf object has a `lookup_item` method that can be used to lookup any type implementing the `Tagged` trait by name, in this case a struct will be searched for:
 
 ```rust
-    let found = dwarf.lookup_item::<dwat::Struct>(struct_name)?;
+    let found = dwarf.lookup_type::<dwat::Struct>(struct_name)?;
 ```
 
 A struct object can be converted to a C style definition String by invoking the `to_string` function:
@@ -82,8 +79,9 @@ struct ntb_ctrl_regs {
 It is also possible to format structs in a verbose mode:
 
 ```rust
+    let verbosity = 1;
     if let Some(found) = found {
-        println!("{}", found.to_string_verbose(&dwarf, 1)?);
+        println!("{}", found.to_string_verbose(&dwarf, verbosity)?);
     }
 ```
 
