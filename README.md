@@ -13,6 +13,23 @@ My focus so far has been on making the type information (specifically structs) p
 - Get byte size information for types
 - Get bit sizes for bit field struct members
 
+# Commandline Utility
+
+Though `dwat` is primarily meant to be a library, a basic cli is included:
+
+```
+Usage: dwat <COMMAND>
+
+Commands:
+  lookup  Find and display a single struct
+  dump    Find and display all structs
+  help    Print this message or the help of the given subcommand(s)
+
+Options:
+  -h, --help  Print help
+```
+
+
 # Examples
 
 There are several examples in the `examples` directory, the following will roughly describe the `lookup` example.
