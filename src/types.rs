@@ -114,8 +114,9 @@ pub struct Member {
     pub location: Location,
 }
 
+/// Enum of supported types which may be returned by get_type()
 #[derive(Clone, Copy, Debug)]
-pub enum MemberType {
+pub enum Type {
     Struct(Struct),
     Array(Array),
     Enum(Enum),
@@ -130,44 +131,44 @@ pub enum MemberType {
     Subrange(Subrange),
 }
 
-impl MemberType {
+impl Type {
     fn u_byte_size(&self, unit: &CU) -> Result<usize, Error> {
         match self {
-            MemberType::Struct(struc) => {
+            Type::Struct(struc) => {
                 struc.u_byte_size(unit)
             },
-            MemberType::Array(arr) => {
+            Type::Array(arr) => {
                 arr.u_byte_size(unit)
             }
-            MemberType::Pointer(ptr) => {
+            Type::Pointer(ptr) => {
                 ptr.u_byte_size(unit)
             }
-            MemberType::Base(base) => {
+            Type::Base(base) => {
                 base.u_byte_size(unit)
             }
-            MemberType::Union(uni) => {
+            Type::Union(uni) => {
                 uni.u_byte_size(unit)
             }
-            MemberType::Subrange(sub) => {
+            Type::Subrange(sub) => {
                 sub.u_byte_size(unit)
             }
-            MemberType::Enum(enu) => {
+            Type::Enum(enu) => {
                 enu.u_byte_size(unit)
             }
-            MemberType::Typedef(typedef) => {
+            Type::Typedef(typedef) => {
                 typedef.u_byte_size(unit)
             }
-            MemberType::Const(cons) => {
+            Type::Const(cons) => {
                 cons.u_byte_size(unit)
             }
-            MemberType::Volatile(vol) => {
+            Type::Volatile(vol) => {
                 vol.u_byte_size(unit)
             }
-            MemberType::Restrict(vol) => {
+            Type::Restrict(vol) => {
                 vol.u_byte_size(unit)
             }
             // --- Unsized ---
-            MemberType::Subroutine(_) => {
+            Type::Subroutine(_) => {
                 Err(Error::ByteSizeAttributeNotFound)
             }
         }
@@ -175,41 +176,41 @@ impl MemberType {
 
     pub fn byte_size(&self, dwarf: &Dwarf) -> Result<usize, Error> {
         match self {
-            MemberType::Struct(struc) => {
+            Type::Struct(struc) => {
                 struc.byte_size(dwarf)
             },
-            MemberType::Array(arr) => {
+            Type::Array(arr) => {
                 arr.byte_size(dwarf)
             }
-            MemberType::Pointer(ptr) => {
+            Type::Pointer(ptr) => {
                 ptr.byte_size(dwarf)
             }
-            MemberType::Base(base) => {
+            Type::Base(base) => {
                 base.byte_size(dwarf)
             }
-            MemberType::Union(uni) => {
+            Type::Union(uni) => {
                 uni.byte_size(dwarf)
             }
-            MemberType::Subrange(sub) => {
+            Type::Subrange(sub) => {
                 sub.byte_size(dwarf)
             }
-            MemberType::Enum(enu) => {
+            Type::Enum(enu) => {
                 enu.byte_size(dwarf)
             }
-            MemberType::Typedef(typedef) => {
+            Type::Typedef(typedef) => {
                 typedef.byte_size(dwarf)
             }
-            MemberType::Const(cons) => {
+            Type::Const(cons) => {
                 cons.byte_size(dwarf)
             }
-            MemberType::Volatile(vol) => {
+            Type::Volatile(vol) => {
                 vol.byte_size(dwarf)
             }
-            MemberType::Restrict(vol) => {
+            Type::Restrict(vol) => {
                 vol.byte_size(dwarf)
             }
             // --- Unsized ---
-            MemberType::Subroutine(_) => {
+            Type::Subroutine(_) => {
                 Err(Error::ByteSizeAttributeNotFound)
             }
         }
@@ -347,9 +348,9 @@ pub(crate) mod unit_inner_type {
     pub trait UnitInnerType {
         fn location(&self) -> Location;
 
-        fn u_get_type(&self, unit: &CU) -> Result<MemberType, Error> {
+        fn u_get_type(&self, unit: &CU) -> Result<Type, Error> {
             unit.entry_context(&self.location().clone(), |entry|
-            -> Result<MemberType, Error> {
+            -> Result<Type, Error> {
                 let mut attrs = entry.attrs();
                 while let Ok(Some(attr)) = attrs.next() {
                     if attr.name() == gimli::DW_AT_type {
@@ -373,7 +374,7 @@ pub(crate) mod unit_inner_type {
 /// This trait specifies that a types contains another type (singular)
 pub trait InnerType : unit_inner_type::UnitInnerType {
     fn get_type(&self, dwarf: &Dwarf)
-    -> Result<MemberType, Error> {
+    -> Result<Type, Error> {
         dwarf.unit_context(&self.location().clone(), |unit| {
             self.u_get_type(unit)
         })?
@@ -479,43 +480,43 @@ impl Subroutine {
     }
 }
 
-fn entry_to_type(location: Location, entry: &DIE) -> Result<MemberType, Error> {
+fn entry_to_type(location: Location, entry: &DIE) -> Result<Type, Error> {
     let tag = match entry.tag() {
         gimli::DW_TAG_array_type => {
-            MemberType::Array(Array{location})
+            Type::Array(Array{location})
         },
         gimli::DW_TAG_enumeration_type => {
-            MemberType::Enum(Enum{location})
+            Type::Enum(Enum{location})
         },
         gimli::DW_TAG_pointer_type => {
-            MemberType::Pointer(Pointer{location})
+            Type::Pointer(Pointer{location})
         },
         gimli::DW_TAG_structure_type => {
-            MemberType::Struct(Struct{location})
+            Type::Struct(Struct{location})
         },
         gimli::DW_TAG_subroutine_type => {
-            MemberType::Subroutine(Subroutine{location})
+            Type::Subroutine(Subroutine{location})
         },
         gimli::DW_TAG_typedef => {
-            MemberType::Typedef(Typedef{location})
+            Type::Typedef(Typedef{location})
         },
         gimli::DW_TAG_union_type => {
-            MemberType::Union(Union{location})
+            Type::Union(Union{location})
         },
         gimli::DW_TAG_base_type => {
-            MemberType::Base(Base{location})
+            Type::Base(Base{location})
         },
         gimli::DW_TAG_const_type => {
-            MemberType::Const(Const{location})
+            Type::Const(Const{location})
         },
         gimli::DW_TAG_volatile_type => {
-            MemberType::Volatile(Volatile{location})
+            Type::Volatile(Volatile{location})
         },
         gimli::DW_TAG_restrict_type => {
-            MemberType::Restrict(Restrict{location})
+            Type::Restrict(Restrict{location})
         },
         gimli::DW_TAG_subrange_type => {
-            MemberType::Subrange(Subrange{location})
+            Type::Subrange(Subrange{location})
         },
         _ => {
             return Err(Error::UnimplementedError(
@@ -656,7 +657,7 @@ pub struct AlignmentStats {
     /// A count of gaps, 'holes', in the struct
     pub nr_holes: usize,
 
-    /// A tuples of (index, hole size)
+    /// A vector containing tuples of (index, hole size)
     pub hole_positions: Vec<(usize, usize)>,
 
     /// The sum of unused bytes from holes in the struct
@@ -674,14 +675,6 @@ pub struct AlignmentStats {
     /// determined for structs, potentially needs to be done recursively)
     pub nr_unnat_alignment: usize,
 }
-
-// impl AlignmentStats {
-//     // FIXME: will be incorrect until nr_unnat_alignment is correctly calculated
-//     fn _is_packed(&self) -> bool {
-//         self.nr_unnat_alignment > 0 && self.nr_holes == 0 &&
-//             self.sum_member_size + self.padding == self._byte_size
-//     }
-// }
 
 impl Struct {
     fn location(&self) -> Location {
@@ -713,7 +706,7 @@ impl Struct {
 
             // array alignment is based on the entry type size
             let byte_size_single = match member.get_type(dwarf)? {
-                MemberType::Array(arr) => arr.entry_size(dwarf)?,
+                Type::Array(arr) => arr.entry_size(dwarf)?,
                 _ => curr_size
             };
 
@@ -927,7 +920,7 @@ impl Enum {
 
 impl Pointer {
     /// alias for get_type()
-    pub fn deref(&self, dwarf: &Dwarf) -> Result<MemberType, Error> {
+    pub fn deref(&self, dwarf: &Dwarf) -> Result<Type, Error> {
         self.get_type(dwarf)
     }
 

@@ -2,19 +2,19 @@
 use crate::unit_has_members::UnitHasMembers;
 use crate::unit_inner_type::UnitInnerType;
 use crate::unit_name_type::UnitNamedType;
-use crate::MemberType;
 use crate::Member;
 use crate::Dwarf;
 use crate::Error;
+use crate::Type;
 use crate::CU;
 
 pub fn format_type(dwarf: &Dwarf, unit: &CU, member_name: String,
-                   typ: MemberType, level: usize, tablevel: usize,
+                   typ: Type, level: usize, tablevel: usize,
                    verbosity: u8, base_offset: usize)
 -> Result<String, Error> {
     let mut out = String::new();
     match typ {
-        MemberType::Array(a) => {
+        Type::Array(a) => {
             let inner = a.u_get_type(unit)?;
             let inner_fmt = format_type(dwarf, unit, "".to_string(), inner,
                                         level+1, tablevel, verbosity,
@@ -38,7 +38,7 @@ pub fn format_type(dwarf: &Dwarf, unit: &CU, member_name: String,
             out.push_str(&bound_str);
             return Ok(out);
         }
-        MemberType::Typedef(t) => {
+        Type::Typedef(t) => {
             let name = t.u_name(dwarf, unit)?;
             if level == 0 {
                 out.push_str(
@@ -48,7 +48,7 @@ pub fn format_type(dwarf: &Dwarf, unit: &CU, member_name: String,
             }
             out.push_str(&name);
         },
-        MemberType::Struct(t) => {
+        Type::Struct(t) => {
             let name = t.u_name(dwarf, unit);
             match name {
                 Ok(name) => {
@@ -80,7 +80,7 @@ pub fn format_type(dwarf: &Dwarf, unit: &CU, member_name: String,
                 Err(e) => return Err(e)
             }
         },
-        MemberType::Enum(t) => {
+        Type::Enum(t) => {
             match t.u_name(dwarf, unit) {
                 Ok(name) => {
                     if level == 0 {
@@ -103,7 +103,7 @@ pub fn format_type(dwarf: &Dwarf, unit: &CU, member_name: String,
                 Err(e) => return Err(e)
             }
         },
-        MemberType::Union(u) => {
+        Type::Union(u) => {
             let name = u.u_name(dwarf, unit);
             match name {
                 Ok(name) => {
@@ -134,7 +134,7 @@ pub fn format_type(dwarf: &Dwarf, unit: &CU, member_name: String,
                 Err(e) => return Err(e)
             }
         },
-        MemberType::Base(t) => {
+        Type::Base(t) => {
             let name = t.u_name(dwarf, unit)?;
             if level == 0 {
                 out.push_str(&format!("{name} {member_name}"));
@@ -143,7 +143,7 @@ pub fn format_type(dwarf: &Dwarf, unit: &CU, member_name: String,
             out.push_str(&name);
             return Ok(out);
         },
-        MemberType::Subroutine(t) => {
+        Type::Subroutine(t) => {
             // just return comma separated arg string
             let params = t.u_get_params(unit)?;
             for pidx in 0..params.len() {
@@ -157,11 +157,11 @@ pub fn format_type(dwarf: &Dwarf, unit: &CU, member_name: String,
                 }
             };
         },
-        MemberType::Pointer(p) => {
+        Type::Pointer(p) => {
             let inner = p.u_get_type(unit);
 
             // pointers to subroutines must be handled differently
-            if let Ok(MemberType::Subroutine(subp)) = inner {
+            if let Ok(Type::Subroutine(subp)) = inner {
 
                 let return_type = match subp.u_get_type(unit) {
                     Ok(rtype) => format_type(dwarf, unit, "".to_string(), rtype,
@@ -173,7 +173,7 @@ pub fn format_type(dwarf: &Dwarf, unit: &CU, member_name: String,
 
                 let argstr = {
                     format_type(dwarf, unit, "".to_string(),
-                                MemberType::Subroutine(subp),
+                                Type::Subroutine(subp),
                                 level+1, tablevel, verbosity,
                                 base_offset)?
                 };
@@ -211,7 +211,7 @@ pub fn format_type(dwarf: &Dwarf, unit: &CU, member_name: String,
             }
             return Ok(out);
         },
-        MemberType::Const(c) => {
+        Type::Const(c) => {
             let inner = c.u_get_type(unit);
             match inner {
                 Ok(inner) => {
@@ -226,7 +226,7 @@ pub fn format_type(dwarf: &Dwarf, unit: &CU, member_name: String,
                 Err(e) => return Err(e)
             }
         },
-        MemberType::Volatile(c) => {
+        Type::Volatile(c) => {
             let inner = c.u_get_type(unit)?;
             let inner_fmt = format_type(dwarf, unit, "".to_string(), inner,
                                         level+1, tablevel, verbosity,
@@ -234,7 +234,7 @@ pub fn format_type(dwarf: &Dwarf, unit: &CU, member_name: String,
             out.push_str(&format!("volatile {inner_fmt}"));
             return Ok(out);
         },
-        MemberType::Restrict(c) => {
+        Type::Restrict(c) => {
             let inner = c.u_get_type(unit)?;
             let inner_fmt = format_type(dwarf, unit, "".to_string(), inner,
                                         level+1, tablevel, verbosity,
