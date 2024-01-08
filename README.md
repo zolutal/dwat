@@ -13,7 +13,7 @@ My focus so far has been on making the type information (specifically structs) p
 - Get byte size information for types
 - Get bit sizes for bit field struct members
 
-# Commandline Utility
+# CLI
 
 Though `dwat` is primarily meant to be a library, a basic cli is included:
 
