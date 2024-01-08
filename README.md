@@ -43,7 +43,7 @@ The first step of using the library is to load the file containing DWARF info in
     let dwarf = Dwarf::load(&*mmap)?;
 ```
 
-The dwarf object has a `lookup_item` method that can be used to lookup any type implementing the `Tagged` trait by name, in this case a struct will be searched for:
+The dwarf object has a `lookup_type` method that can be used to lookup any type implementing the `Tagged` trait by name, in this case a struct will be searched for:
 
 ```rust
     let found = dwarf.lookup_type::<dwat::Struct>(struct_name)?;
