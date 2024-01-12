@@ -3,12 +3,12 @@
 use gimli::{RunTimeEndian, DebugStrOffset};
 use gimli::AttributeValue;
 
+use crate::dwarf::borrowable_dwarf::BorrowableDwarf;
 use crate::types::unit_has_members::UnitHasMembers;
 use crate::types::unit_inner_type::UnitInnerType;
 use crate::types::unit_name_type::UnitNamedType;
-use crate::dwarf::DwarfContext;
 use crate::format::format_member;
-use crate::Dwarf;
+use crate::dwarf::DwarfContext;
 use crate::Error;
 
 // Abbreviations for some lengthy gimli types
@@ -90,12 +90,6 @@ pub struct Restrict {
     pub location: Location,
 }
 
-/// Represents the bounds of an array
-#[derive(Clone, Copy, Debug)]
-pub struct Subrange {
-    pub location: Location,
-}
-
 /// Represents the arguments list of a Subprocedure
 #[derive(Clone, Copy, Debug)]
 pub struct FormalParameter {
@@ -128,7 +122,6 @@ pub enum Type {
     Const(Const),
     Volatile(Volatile),
     Restrict(Restrict),
-    Subrange(Subrange),
 }
 
 impl Type {
@@ -148,9 +141,6 @@ impl Type {
             }
             Type::Union(uni) => {
                 uni.u_byte_size(unit)
-            }
-            Type::Subrange(sub) => {
-                sub.u_byte_size(unit)
             }
             Type::Enum(enu) => {
                 enu.u_byte_size(unit)
@@ -174,7 +164,8 @@ impl Type {
         }
     }
 
-    pub fn byte_size(&self, dwarf: &Dwarf) -> Result<usize, Error> {
+    pub fn byte_size<D>(&self, dwarf: &D) -> Result<usize, Error>
+    where D: DwarfContext {
         match self {
             Type::Struct(struc) => {
                 struc.byte_size(dwarf)
@@ -190,9 +181,6 @@ impl Type {
             }
             Type::Union(uni) => {
                 uni.byte_size(dwarf)
-            }
-            Type::Subrange(sub) => {
-                sub.byte_size(dwarf)
             }
             Type::Enum(enu) => {
                 enu.byte_size(dwarf)
@@ -218,8 +206,9 @@ impl Type {
 }
 
 // Try to retrieve a string from the debug_str section for a given offset
-pub(crate) fn from_dbg_str_ref(dwarf: &Dwarf, str_ref: DebugStrOffset<usize>)
--> Option<String> {
+pub(crate) fn from_dbg_str_ref<D>(dwarf: &D, str_ref: DebugStrOffset<usize>)
+-> Option<String>
+where D: DwarfContext + BorrowableDwarf {
     dwarf.borrow_dwarf(|dwarf| {
         if let Ok(str_ref) = dwarf.debug_str.get_str(str_ref) {
             let str_ref = str_ref.to_string_lossy();
@@ -230,7 +219,8 @@ pub(crate) fn from_dbg_str_ref(dwarf: &Dwarf, str_ref: DebugStrOffset<usize>)
 }
 
 // Try to retrieve the name attribute as a string for a DIE if one exists
-pub(crate) fn get_entry_name(dwarf: &Dwarf, entry: &DIE) -> Option<String> {
+pub(crate) fn get_entry_name<D>(dwarf: &D, entry: &DIE) -> Option<String>
+where D: DwarfContext + BorrowableDwarf {
     let mut attrs = entry.attrs();
     while let Ok(Some(attr)) = &attrs.next() {
         if attr.name() == gimli::DW_AT_name {
@@ -250,6 +240,39 @@ pub(crate) fn get_entry_name(dwarf: &Dwarf, entry: &DIE) -> Option<String> {
     None
 }
 
+// // Try to retrieve a string from the debug_str section for a given offset
+// pub(crate) fn owned_from_dbg_str_ref(dwarf: &OwnedDwarf, str_ref: DebugStrOffset<usize>)
+// -> Option<String> {
+//     dwarf.borrow_dwarf(|dwarf| {
+//         if let Ok(str_ref) = dwarf.debug_str.get_str(str_ref) {
+//             let str_ref = str_ref.to_string_lossy();
+//             return Some(str_ref.to_string());
+//         }
+//         None
+//     })
+// }
+//
+// // Try to retrieve the name attribute as a string for a DIE if one exists
+// pub(crate) fn owned_get_entry_name(dwarf: &OwnedDwarf, entry: &DIE) -> Option<String> {
+//     let mut attrs = entry.attrs();
+//     while let Ok(Some(attr)) = &attrs.next() {
+//         if attr.name() == gimli::DW_AT_name {
+//             match attr.value() {
+//                 gimli::AttributeValue::String(str) => {
+//                     if let Ok(str) = str.to_string() {
+//                         return Some(str.to_string())
+//                     }
+//                 }
+//                 gimli::AttributeValue::DebugStrRef(strref) => {
+//                     return owned_from_dbg_str_ref(dwarf, strref)
+//                 }
+//                 _ => { }
+//             };
+//         }
+//     }
+//     None
+// }
+
 /// force UnitNamedType trait to be private
 pub(crate) mod unit_name_type {
     use crate::types::*;
@@ -259,7 +282,8 @@ pub(crate) mod unit_name_type {
     pub trait UnitNamedType {
         fn location(&self) -> Location;
 
-        fn u_name(&self, dwarf: &Dwarf, unit: &CU) -> Result<String, Error> {
+        fn u_name<D>(&self, dwarf: &D, unit: &CU) -> Result<String, Error>
+        where D: DwarfContext + BorrowableDwarf {
             if let Some(name) = unit.entry_context(&self.location(), |entry| {
                 get_entry_name(dwarf, entry)
             })? {
@@ -272,7 +296,8 @@ pub(crate) mod unit_name_type {
 }
 
 pub trait NamedType : unit_name_type::UnitNamedType {
-    fn name(&self, dwarf: &Dwarf) -> Result<String, Error> {
+    fn name<D>(&self, dwarf: &D) -> Result<String, Error>
+    where D: DwarfContext + BorrowableDwarf {
         dwarf.unit_context(&self.location(), |unit| {
             self.u_name(dwarf, unit)
         })?
@@ -300,7 +325,6 @@ impl_named_type!(Base);
 impl_named_type!(Const);
 impl_named_type!(Volatile);
 impl_named_type!(Restrict);
-impl_named_type!(Subrange);
 impl_named_type!(Variable);
 impl_named_type!(Member);
 
@@ -336,7 +360,6 @@ impl_tagged_type!(Base, gimli::DW_TAG_base_type);
 impl_tagged_type!(Const, gimli::DW_TAG_const_type);
 impl_tagged_type!(Volatile, gimli::DW_TAG_volatile_type);
 impl_tagged_type!(Restrict, gimli::DW_TAG_restrict_type);
-impl_tagged_type!(Subrange, gimli::DW_TAG_subrange_type);
 impl_tagged_type!(Variable, gimli::DW_TAG_variable);
 
 
@@ -373,8 +396,8 @@ pub(crate) mod unit_inner_type {
 
 /// This trait specifies that a types contains another type (singular)
 pub trait InnerType : unit_inner_type::UnitInnerType {
-    fn get_type(&self, dwarf: &Dwarf)
-    -> Result<Type, Error> {
+    fn get_type<D>(&self, dwarf: &D) -> Result<Type, Error>
+    where D: DwarfContext + BorrowableDwarf {
         dwarf.unit_context(&self.location().clone(), |unit| {
             self.u_get_type(unit)
         })?
@@ -472,7 +495,7 @@ impl Subroutine {
         Ok(params)
     }
 
-    pub fn get_params(&self, dwarf: &Dwarf)
+    pub fn get_params<D: DwarfContext>(&self, dwarf: &D)
     -> Result<Vec<FormalParameter>, Error> {
         dwarf.unit_context(&self.location, |unit| {
             self.u_get_params(unit)
@@ -515,9 +538,6 @@ fn entry_to_type(location: Location, entry: &DIE) -> Result<Type, Error> {
         gimli::DW_TAG_restrict_type => {
             Type::Restrict(Restrict{location})
         },
-        gimli::DW_TAG_subrange_type => {
-            Type::Subrange(Subrange{location})
-        },
         _ => {
             return Err(Error::UnimplementedError(
                     "entry_to_type, unhandled dwarf type".to_string()
@@ -539,7 +559,8 @@ impl Member {
         }
     }
 
-    pub fn bit_size(&self, dwarf: &Dwarf) -> Result<usize, Error> {
+    pub fn bit_size<D>(&self, dwarf: &D) -> Result<usize, Error>
+    where D: DwarfContext {
         dwarf.unit_context(&self.location, |unit| {
             self.u_bit_size(unit)
         })?
@@ -550,7 +571,8 @@ impl Member {
         inner.u_byte_size(unit)
     }
 
-    pub fn byte_size(&self, dwarf: &Dwarf) -> Result<usize, Error> {
+    pub fn byte_size<D>(&self, dwarf: &D) -> Result<usize, Error>
+    where D: DwarfContext {
         dwarf.unit_context(&self.location, |unit| {
             self.u_byte_size(unit)
         })?
@@ -577,7 +599,8 @@ impl Member {
     }
 
     /// The byte offset of the member from the start of the datatype
-    pub fn member_location(&self, dwarf: &Dwarf) -> Result<usize, Error> {
+    pub fn member_location<D>(&self, dwarf: &D) -> Result<usize, Error>
+    where D: DwarfContext {
         dwarf.unit_context(&self.location, |unit| {
             self.u_member_location(unit)
         })?
@@ -588,7 +611,8 @@ impl Member {
     }
 
     /// Alias for member_location
-    pub fn offset(&self, dwarf: &Dwarf) -> Result<usize, Error> {
+    pub fn offset<D>(&self, dwarf: &D) -> Result<usize, Error>
+    where D: DwarfContext {
         self.member_location(dwarf)
     }
 }
@@ -633,7 +657,8 @@ pub(crate) mod unit_has_members {
 
 pub trait HasMembers : unit_has_members::UnitHasMembers {
     /// Get the members/fields of this type
-    fn members(&self, dwarf: &Dwarf) -> Result<Vec<Member>, Error> {
+    fn members<D>(&self, dwarf: &D) -> Result<Vec<Member>, Error>
+    where D: DwarfContext {
         dwarf.unit_context(&self.location(), |unit| {
             self.u_members(unit)
         })?
@@ -681,8 +706,9 @@ impl Struct {
         self.location
     }
 
-    pub fn alignment_stats(&self, dwarf: &Dwarf)
-    -> Result<AlignmentStats, Error> {
+    pub fn alignment_stats<D>(&self, dwarf: &D)
+    -> Result<AlignmentStats, Error>
+    where D: DwarfContext + BorrowableDwarf {
         let mut nr_holes: usize = 0;
         let mut hole_positions: Vec<(usize, usize)> = Vec::new();
         let mut sum_holes: usize = 0;
@@ -695,7 +721,7 @@ impl Struct {
             let curr_offset = member.offset(dwarf)?;
             let curr_size = member.byte_size(dwarf)?;
 
-            sum_member_size = sum_member_size + curr_size;
+            sum_member_size += curr_size;
 
             // nothing to do for the first member
             if prev_offset == 0 {
@@ -717,7 +743,7 @@ impl Struct {
 
             // calc padding between end of prev type
             let hole_sz = curr_offset - (prev_size + prev_offset);
-            sum_holes = sum_holes + hole_sz;
+            sum_holes += hole_sz;
 
             if hole_sz > 0 {
                 nr_holes += 1;
@@ -727,7 +753,7 @@ impl Struct {
             // if the size is divisible byte the type size, it is naturally
             // aligned, otherwise some packing likely occurred
             if curr_offset % byte_size_single != 0 {
-                nr_unnat_alignment = nr_unnat_alignment + 1;
+                nr_unnat_alignment += 1;
             }
 
             prev_offset = curr_offset;
@@ -743,8 +769,9 @@ impl Struct {
                             sum_member_size, nr_unnat_alignment })
     }
 
-    pub fn to_string_verbose(&self, dwarf: &Dwarf, verbosity: u8)
-    -> Result<String, Error> {
+    pub fn to_string_verbose<D>(&self, dwarf: &D, verbosity: u8)
+    -> Result<String, Error>
+    where D: BorrowableDwarf + DwarfContext {
         let mut repr = String::new();
         let _ = dwarf.unit_context(&self.location, |unit| {
             match self.u_name(dwarf, unit) {
@@ -787,7 +814,8 @@ impl Struct {
         Ok(repr)
     }
 
-    pub fn to_string(&self, dwarf: &Dwarf) -> Result<String, Error> {
+    pub fn to_string<D>(&self, dwarf: &D) -> Result<String, Error>
+    where D: BorrowableDwarf + DwarfContext {
         self.to_string_verbose(dwarf, 0)
     }
 
@@ -804,7 +832,8 @@ impl Struct {
         Err(Error::ByteSizeAttributeNotFound)
     }
 
-    pub fn byte_size(&self, dwarf: &Dwarf) -> Result<usize, Error> {
+    pub fn byte_size<D>(&self, dwarf: &D) -> Result<usize, Error>
+    where D: DwarfContext {
         dwarf.unit_context(&self.location, |unit| {
             self.u_byte_size(unit)
         })?
@@ -822,7 +851,8 @@ impl Struct {
         Err(Error::AlignmentAttributeNotFound)
     }
 
-    pub fn alignment(&self, dwarf: &Dwarf) -> Result<usize, Error> {
+    pub fn alignment<D>(&self, dwarf: &D) -> Result<usize, Error>
+    where D: DwarfContext {
         dwarf.unit_context(&self.location, |unit| {
             self.u_alignment(unit)
         })?
@@ -834,8 +864,9 @@ impl Union {
         self.location
     }
 
-    pub fn to_string_verbose(&self, dwarf: &Dwarf, verbosity: u8)
-    -> Result<String, Error> {
+    pub fn to_string_verbose<D>(&self, dwarf: &D, verbosity: u8)
+    -> Result<String, Error>
+    where D: DwarfContext + BorrowableDwarf {
         let mut repr = String::new();
         let _ = dwarf.unit_context(&self.location, |unit| {
             match self.u_name(dwarf, unit) {
@@ -856,7 +887,8 @@ impl Union {
         Ok(repr)
     }
 
-    pub fn to_string(&self, dwarf: &Dwarf) -> Result<String, Error> {
+    pub fn to_string<D>(&self, dwarf: &D) -> Result<String, Error>
+    where D: DwarfContext + BorrowableDwarf {
         self.to_string_verbose(dwarf, 0)
     }
 
@@ -884,7 +916,8 @@ impl Union {
         Ok(bytesz)
     }
 
-    pub fn byte_size(&self, dwarf: &Dwarf) -> Result<usize, Error> {
+    pub fn byte_size<D>(&self, dwarf: &D) -> Result<usize, Error>
+    where D: DwarfContext {
         dwarf.unit_context(&self.location(), |unit| {
             self.u_byte_size(unit)
         })?
@@ -911,7 +944,8 @@ impl Enum {
 
     /// The memory footprint of the enum, generally the size of the largest
     /// variant
-    pub fn byte_size(&self, dwarf: &Dwarf) -> Result<usize, Error> {
+    pub fn byte_size<D>(&self, dwarf: &D) -> Result<usize, Error>
+    where D: DwarfContext {
         dwarf.unit_context(&self.location(), |unit| {
             self.u_byte_size(unit)
         })?
@@ -920,7 +954,8 @@ impl Enum {
 
 impl Pointer {
     /// alias for get_type()
-    pub fn deref(&self, dwarf: &Dwarf) -> Result<Type, Error> {
+    pub fn deref<D>(&self, dwarf: &D) -> Result<Type, Error>
+    where D: DwarfContext + BorrowableDwarf {
         self.get_type(dwarf)
     }
 
@@ -931,7 +966,8 @@ impl Pointer {
     }
 
     /// byte_size of a pointer will be the address size
-    pub fn byte_size(&self, dwarf: &Dwarf) -> Result<usize, Error> {
+    pub fn byte_size<D>(&self, dwarf: &D) -> Result<usize, Error>
+    where D: DwarfContext {
         dwarf.unit_context(&self.location, |unit| {
             self.u_byte_size(unit)
         })?
@@ -953,7 +989,8 @@ impl Base {
 
     // if a base type doesn't have a size something is horribly wrong
     // so don't recurse on them
-    pub fn byte_size(&self, dwarf: &Dwarf) -> Result<usize, Error> {
+    pub fn byte_size<D>(&self, dwarf: &D) -> Result<usize, Error>
+    where D: DwarfContext {
         dwarf.unit_context(&self.location(), |unit| {
             self.u_byte_size(unit)
         })?
@@ -978,7 +1015,8 @@ impl Typedef {
         inner_type.u_byte_size(unit)
     }
 
-    pub fn byte_size(&self, dwarf: &Dwarf) -> Result<usize, Error> {
+    pub fn byte_size<D>(&self, dwarf: &D) -> Result<usize, Error>
+    where D: DwarfContext {
         dwarf.unit_context(&self.location(), |unit| {
             self.u_byte_size(unit)
         })?
@@ -1003,7 +1041,8 @@ impl Const {
         inner_type.u_byte_size(unit)
     }
 
-    pub fn byte_size(&self, dwarf: &Dwarf) -> Result<usize, Error> {
+    pub fn byte_size<D>(&self, dwarf: &D) -> Result<usize, Error>
+    where D: DwarfContext {
         dwarf.unit_context(&self.location(), |unit| {
             self.u_byte_size(unit)
         })?
@@ -1028,7 +1067,8 @@ impl Volatile {
         inner_type.u_byte_size(unit)
     }
 
-    pub fn byte_size(&self, dwarf: &Dwarf) -> Result<usize, Error> {
+    pub fn byte_size<D>(&self, dwarf: &D) -> Result<usize, Error>
+    where D: DwarfContext {
         dwarf.unit_context(&self.location(), |unit| {
             self.u_byte_size(unit)
         })?
@@ -1053,31 +1093,8 @@ impl Restrict {
         inner_type.u_byte_size(unit)
     }
 
-    pub fn byte_size(&self, dwarf: &Dwarf) -> Result<usize, Error> {
-        dwarf.unit_context(&self.location(), |unit| {
-            self.u_byte_size(unit)
-        })?
-    }
-}
-
-impl Subrange {
-    fn location(&self) -> Location {
-        self.location
-    }
-
-    pub(crate) fn u_byte_size(&self, unit: &CU) -> Result<usize, Error> {
-        let entry_size = unit.entry_context(&self.location(), |entry| {
-            get_entry_byte_size(entry)
-        })?;
-
-        if let Some(entry_size) = entry_size {
-            return Ok(entry_size);
-        }
-
-        Err(Error::ByteSizeAttributeNotFound)
-    }
-
-    pub fn byte_size(&self, dwarf: &Dwarf) -> Result<usize, Error> {
+    pub fn byte_size<D>(&self, dwarf: &D) -> Result<usize, Error>
+    where D: DwarfContext {
         dwarf.unit_context(&self.location(), |unit| {
             self.u_byte_size(unit)
         })?
@@ -1127,7 +1144,8 @@ impl Array {
     }
 
     /// The number of items in the array
-    pub fn get_bound(&self, dwarf: &Dwarf) -> Result<usize, Error> {
+    pub fn get_bound<D>(&self, dwarf: &D) -> Result<usize, Error>
+    where D: DwarfContext {
         dwarf.unit_context(&self.location(), |unit| {
             self.u_get_bound(unit)
         })?
@@ -1139,7 +1157,8 @@ impl Array {
     }
 
     /// The size of one array item
-    pub fn entry_size(&self, dwarf: &Dwarf) -> Result<usize, Error> {
+    pub fn entry_size<D>(&self, dwarf: &D) -> Result<usize, Error>
+    where D: DwarfContext {
         dwarf.unit_context(&self.location, |unit| {
             self.u_entry_size(unit)
         })?
@@ -1160,7 +1179,8 @@ impl Array {
     }
 
     /// The memory footprint of the entire array
-    pub fn byte_size(&self, dwarf: &Dwarf) -> Result<usize, Error> {
+    pub fn byte_size<D>(&self, dwarf: &D) -> Result<usize, Error>
+    where D: DwarfContext {
         dwarf.unit_context(&self.location(), |unit| {
             self.u_byte_size(unit)
         })?

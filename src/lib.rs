@@ -16,11 +16,16 @@ pub mod dwarf;
 pub use dwarf::Dwarf;
 pub use types::*;
 
+#[cfg(feature = "python")]
+pub mod python;
+
 pub mod prelude {
     //! Re-exports commonly needed traits
-    pub use super::types::NamedType;
-    pub use super::types::InnerType;
-    pub use super::types::HasMembers;
+    pub use crate::types::NamedType;
+    pub use crate::types::InnerType;
+    pub use crate::types::HasMembers;
+    pub use crate::dwarf::DwarfContext;
+    pub use crate::dwarf::DwarfLookups;
 }
 
 /// Error type for parsing/loading DWARF information

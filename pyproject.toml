@@ -1,0 +1,29 @@
+[build-system]
+requires = ["maturin>=1.0,<2.0"]
+build-backend = "maturin"
+
+[tool.maturin]
+features = ["pyo3/extension-module", "python"]
+
+[project]
+name = "dwat"
+version = "0.5.0"
+description = "Library for accessing DWARF debug information"
+readme = "README.md"
+url = "https://github.com/zolutal/dwat"
+requires-python = ">=3.8"
+classifiers = [
+    "License :: OSI Approved :: BSD License",
+    "Programming Language :: Python",
+    "Programming Language :: Rust",
+    "Operating System :: POSIX"
+]
+license = {file = "LICENSE"}
+authors = [
+  {name = "Justin Miller"}
+]
+
+[project.urls]
+homepage = "github.com/zolutal/dwat"
+repository = "github.com/zolutal/dwat"
+

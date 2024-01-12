@@ -10,6 +10,10 @@ readme = "README.md"
 keywords = [ "elf", "debug", "dwarf"]
 categories = ["Debugging"]
 
+[lib]
+name = "dwat"
+crate-type = ["rlib", "cdylib"]
+
 [dependencies]
 gimli = { version = "0.27.0", default-features = false, features = ["read"] }
 memmap2 = { version = "0.5.5" }
@@ -20,11 +24,14 @@ clap = { version = "4.2", features = ["derive"] }
 thiserror = "1.0.50"
 anyhow = "1.0.75"
 tempfile = "3.8.1"
+libc = { version = "0.2.152", optional = true }
+pyo3 = { version = "0.20.2", features = ["extension-module"], optional = true }
 
 [features]
 default = ["std-object", "fallible-iterator", "smallvec"]
 std = ["gimli/std"]
 std-object = ["std", "object", "object/std", "object/compression", "gimli/endian-reader"]
+python = ["pyo3", "libc"]
 
 [profile.release]
 codegen-units = 1

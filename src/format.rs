@@ -1,17 +1,16 @@
 //! Formatting methods for type information.
+use crate::dwarf::borrowable_dwarf::BorrowableDwarf;
 use crate::unit_has_members::UnitHasMembers;
 use crate::unit_inner_type::UnitInnerType;
 use crate::unit_name_type::UnitNamedType;
-use crate::Member;
-use crate::Dwarf;
-use crate::Error;
-use crate::Type;
-use crate::CU;
+use crate::{Member, Error, Type, CU};
+use crate::dwarf::DwarfContext;
 
-pub fn format_type(dwarf: &Dwarf, unit: &CU, member_name: String,
-                   typ: Type, level: usize, tablevel: usize,
-                   verbosity: u8, base_offset: usize)
--> Result<String, Error> {
+pub fn format_type<D>(dwarf: &D, unit: &CU, member_name: String, typ: Type,
+                      level: usize, tablevel: usize, verbosity: u8,
+                      base_offset: usize)
+-> Result<String, Error>
+where D: DwarfContext + BorrowableDwarf {
     let mut out = String::new();
     match typ {
         Type::Array(a) => {
@@ -241,17 +240,15 @@ pub fn format_type(dwarf: &Dwarf, unit: &CU, member_name: String,
                                         base_offset)?;
             out.push_str(&format!("{inner_fmt} restrict"));
             return Ok(out);
-        },
-        _ => {
-            eprintln!("Unhandled type could not be formatted {typ:?}");
         }
     }
     Ok(out)
 }
 
-pub fn format_member(dwarf: &Dwarf, unit: &CU, member: Member, tablevel: usize,
-                     verbosity: u8, base_offset: usize)
--> Result<String, Error> {
+pub fn format_member<D>(dwarf: &D, unit: &CU, member: Member, tablevel: usize,
+                        verbosity: u8, base_offset: usize)
+-> Result<String, Error>
+where D: DwarfContext + BorrowableDwarf {
     let mtype = member.u_get_type(unit)?;
     let name = match member.u_name(dwarf, unit) {
         Ok(name) => name,

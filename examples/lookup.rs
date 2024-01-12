@@ -1,6 +1,8 @@
-use dwat::Dwarf;
 use std::fs::File;
 use memmap2::Mmap;
+
+use dwat::prelude::*;
+use dwat::Dwarf;
 
 fn main() -> anyhow::Result<()> {
     let mut args = std::env::args().skip(1);
@@ -20,7 +22,7 @@ fn main() -> anyhow::Result<()> {
 
     let file = File::open(path).unwrap();
     let mmap = unsafe { Mmap::map(&file) }.unwrap();
-    let mut dwarf = Dwarf::load(&*mmap)?;
+    let dwarf = Dwarf::load(&*mmap)?;
 
     // some good test cases:
     // compat_rusage

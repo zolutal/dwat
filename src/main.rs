@@ -1,5 +1,6 @@
 use clap::{Parser, Subcommand};
 use std::path::PathBuf;
+use dwat::prelude::*;
 use memmap2::Mmap;
 use std::fs::File;
 use dwat::Dwarf;
@@ -52,9 +53,9 @@ fn main() -> anyhow::Result<()> {
     match args.commands {
         Commands::Lookup { dwarf_file, name, verbose } => {
             let file = File::open(dwarf_file)?;
-            let mmap = unsafe { Mmap::map(&file) }?;
+            let mmap = &*unsafe { Mmap::map(&file) }?;
 
-            let mut dwarf = Dwarf::load(&*mmap)?;
+            let dwarf = Dwarf::load(mmap)?;
 
             let verbosity: u8 = verbose.into();
 
