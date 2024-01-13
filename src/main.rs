@@ -77,7 +77,7 @@ fn main() -> anyhow::Result<()> {
             let verbosity: u8 = verbose.into();
 
             if fast {
-                let map = dwarf.get_named_type_map::<dwat::Struct>()?;
+                let map = dwarf.get_named_types_map::<dwat::Struct>()?;
                 for struc in map.values() {
                     println!("{}", struc.to_string_verbose(&dwarf, verbosity)?)
                 }

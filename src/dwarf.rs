@@ -136,7 +136,7 @@ where Self: Sized + DwarfContext {
     }
 
     /// Get a HashMap of all debug info of some type hashed by name
-    fn get_named_type_map<T: Tagged>(&self)
+    fn get_named_types_map<T: Tagged>(&self)
     -> Result<HashMap<String, T>, Error> {
         let mut item_locations: HashMap<String, T> = HashMap::new();
         self.borrow_dwarf(|dwarf| {

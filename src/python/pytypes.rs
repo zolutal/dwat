@@ -18,7 +18,8 @@ pub(super) enum Types {
     Restrict,
 }
 
-#[pyclass]
+/// Types that have names, used by Dwarf's lookup/get_named* methods
+#[pyclass(name = "NamedType")]
 pub(super) enum NamedTypes {
     Struct,
     Enum,
@@ -189,16 +190,19 @@ macro_rules! attr_getter {
 
 #[pymethods]
 impl Struct {
+    /// The name of the struct
     #[getter]
     pub fn name(&self) -> PyResult<Option<String>> {
         attr_getter!(self, name, crate::Error::NameAttributeNotFound)
     }
 
+    /// The size of this type in bytes
     #[getter]
     pub fn byte_size(&self) -> PyResult<Option<usize>> {
         attr_getter!(self, byte_size, crate::Error::ByteSizeAttributeNotFound)
     }
 
+    /// A list of members/fields of this struct
     pub fn members(&self) -> PyResult<Vec<Member>> {
         let dwarf = &*self.dwarf.inner;
         let members = self.inner.members(dwarf)?;
@@ -230,16 +234,19 @@ impl Struct {
 
 #[pymethods]
 impl Array {
+    /// The size (footprint) of this type in bytes
     #[getter]
     pub fn byte_size(&self) -> PyResult<Option<usize>> {
         attr_getter!(self, byte_size, crate::Error::ByteSizeAttributeNotFound)
     }
 
+    /// Retrieves the backing type of the array
     pub fn r#type(&self, py: Python<'_>) -> PyResult<Option<PyObject>> {
         let dwarf = &*self.dwarf.inner;
         Ok(to_py_object(py, self.inner.get_type(dwarf)?, &self.dwarf))
     }
 
+    /// Get the bounds (number of entries) of the Array
     #[getter]
     pub fn bounds(&self) -> PyResult<usize> {
         let dwarf = &*self.dwarf.inner;
@@ -253,16 +260,19 @@ impl Array {
 
 #[pymethods]
 impl Enum {
+    /// The size of this type in bytes
     #[getter]
     pub fn byte_size(&self) -> PyResult<Option<usize>> {
         attr_getter!(self, byte_size, crate::Error::ByteSizeAttributeNotFound)
     }
 
+    /// The name of the enum
     #[getter]
     pub fn name(&self) -> PyResult<Option<String>> {
         attr_getter!(self, name, crate::Error::NameAttributeNotFound)
     }
 
+    /// Retrieves the backing type of the enum
     pub fn r#type(&self, py: Python<'_>) -> PyResult<Option<PyObject>> {
         let dwarf = &*self.dwarf.inner;
         Ok(to_py_object(py, self.inner.get_type(dwarf)?, &self.dwarf))
@@ -275,16 +285,19 @@ impl Enum {
 
 #[pymethods]
 impl Pointer {
+    /// The size of this type in bytes
     #[getter]
     pub fn byte_size(&self) -> PyResult<Option<usize>> {
         attr_getter!(self, byte_size, crate::Error::ByteSizeAttributeNotFound)
     }
 
+    /// Retrieves the backing type of the pointer
     pub fn r#type(&self, py: Python<'_>) -> PyResult<Option<PyObject>> {
         let dwarf = &*self.dwarf.inner;
         Ok(to_py_object(py, self.inner.get_type(dwarf)?, &self.dwarf))
     }
 
+    /// Retrieves the backing type of the pointer
     pub fn deref(&self, py: Python<'_>) -> PyResult<Option<PyObject>> {
         let dwarf = &*self.dwarf.inner;
         Ok(to_py_object(py, self.inner.get_type(dwarf)?, &self.dwarf))
@@ -297,11 +310,13 @@ impl Pointer {
 
 #[pymethods]
 impl Subroutine {
+    /// Retrieves the return_type of the subroutine
     pub fn return_type(&self, py: Python<'_>) -> PyResult<Option<PyObject>> {
         let dwarf = &*self.dwarf.inner;
         Ok(to_py_object(py, self.inner.get_type(dwarf)?, &self.dwarf))
     }
 
+    /// Retrieves the parameters/arguments of the subroutine
     pub fn params(&self)
     -> PyResult<Vec<Parameter>> {
         let dwarf = &*self.dwarf.inner;
@@ -326,16 +341,19 @@ impl Subroutine {
 
 #[pymethods]
 impl Typedef {
+    /// The name of the typedef
     #[getter]
     pub fn name(&self) -> PyResult<Option<String>> {
         attr_getter!(self, name, crate::Error::NameAttributeNotFound)
     }
 
+    /// The size of this type in bytes
     #[getter]
     pub fn byte_size(&self) -> PyResult<Option<usize>> {
         attr_getter!(self, byte_size, crate::Error::ByteSizeAttributeNotFound)
     }
 
+    /// Retrieves the backing type of the typedef
     pub fn r#type(&self, py: Python<'_>) -> PyResult<Option<PyObject>> {
         let dwarf = &*self.dwarf.inner;
         Ok(to_py_object(py, self.inner.get_type(dwarf)?, &self.dwarf))
@@ -356,16 +374,19 @@ impl Typedef {
 
 #[pymethods]
 impl Union {
+    /// The name of the union
     #[getter]
     pub fn name(&self) -> PyResult<Option<String>> {
         attr_getter!(self, name, crate::Error::NameAttributeNotFound)
     }
 
+    /// The size of this type in bytes
     #[getter]
     pub fn byte_size(&self) -> PyResult<Option<usize>> {
         attr_getter!(self, byte_size, crate::Error::ByteSizeAttributeNotFound)
     }
 
+    /// A list of members of this union
     pub fn members(&self) -> PyResult<Vec<Member>> {
         let dwarf = &*self.dwarf.inner;
         let members = self.inner.members(dwarf)?;
@@ -382,7 +403,6 @@ impl Union {
         Ok(py_members)
     }
 
-
     pub fn __str__(&self) -> PyResult<String> {
         Ok(self.inner.to_string(&*self.dwarf.inner)?)
     }
@@ -398,11 +418,13 @@ impl Union {
 
 #[pymethods]
 impl Base {
+    /// The name of the base type
     #[getter]
     pub fn name(&self) -> PyResult<Option<String>> {
         attr_getter!(self, name, crate::Error::NameAttributeNotFound)
     }
 
+    /// The size of this type in bytes
     #[getter]
     pub fn byte_size(&self) -> PyResult<Option<usize>> {
         attr_getter!(self, byte_size, crate::Error::ByteSizeAttributeNotFound)
@@ -423,11 +445,13 @@ impl Base {
 
 #[pymethods]
 impl Const {
+    /// The size of this type in bytes
     #[getter]
     pub fn byte_size(&self) -> PyResult<Option<usize>> {
         attr_getter!(self, byte_size, crate::Error::ByteSizeAttributeNotFound)
     }
 
+    /// Retrieves the backing type of the const modifier
     pub fn r#type(&self, py: Python<'_>) -> PyResult<Option<PyObject>> {
         let dwarf = &*self.dwarf.inner;
         Ok(to_py_object(py, self.inner.get_type(dwarf)?, &self.dwarf))
@@ -440,11 +464,13 @@ impl Const {
 
 #[pymethods]
 impl Volatile {
+    /// The size of this type in bytes
     #[getter]
     pub fn byte_size(&self) -> PyResult<Option<usize>> {
         attr_getter!(self, byte_size, crate::Error::ByteSizeAttributeNotFound)
     }
 
+    /// Retrieves the backing type of the volatile modifier
     pub fn r#type(&self, py: Python<'_>) -> PyResult<Option<PyObject>> {
         let dwarf = &*self.dwarf.inner;
         Ok(to_py_object(py, self.inner.get_type(dwarf)?, &self.dwarf))
@@ -457,11 +483,13 @@ impl Volatile {
 
 #[pymethods]
 impl Restrict {
+    /// The size of this type in bytes
     #[getter]
     pub fn byte_size(&self) -> PyResult<Option<usize>> {
         attr_getter!(self, byte_size, crate::Error::ByteSizeAttributeNotFound)
     }
 
+    /// Retrieves the backing type of the restrict modifier
     pub fn r#type(&self, py: Python<'_>) -> PyResult<Option<PyObject>> {
         let dwarf = &*self.dwarf.inner;
         Ok(to_py_object(py, self.inner.get_type(dwarf)?, &self.dwarf))
@@ -474,6 +502,7 @@ impl Restrict {
 
 #[pymethods]
 impl Parameter {
+    /// Retrieves the backing type of the parameter
     pub fn r#type(&self, py: Python<'_>) -> PyResult<Option<PyObject>> {
         let dwarf = &*self.dwarf.inner;
         Ok(to_py_object(py, self.inner.get_type(dwarf)?, &self.dwarf))
@@ -486,16 +515,19 @@ impl Parameter {
 
 #[pymethods]
 impl Member {
+    /// The name of the member
     #[getter]
     pub fn name(&self) -> PyResult<Option<String>> {
         attr_getter!(self, name, crate::Error::NameAttributeNotFound)
     }
 
+    /// The size of this member in bytes
     #[getter]
     pub fn byte_size(&self) -> PyResult<Option<usize>> {
         attr_getter!(self, byte_size, crate::Error::ByteSizeAttributeNotFound)
     }
 
+    /// Retrieves the backing type of the member
     pub fn r#type(&self, py: Python<'_>) -> PyResult<Option<PyObject>> {
         let dwarf = &*self.dwarf.inner;
         Ok(to_py_object(py, self.inner.get_type(dwarf)?, &self.dwarf))

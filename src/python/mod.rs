@@ -22,6 +22,7 @@ impl std::convert::From<crate::Error> for PyErr {
     }
 }
 
+/// Represents a loaded DWARF file
 #[pyclass]
 #[derive(Clone)]
 struct Dwarf {
@@ -30,6 +31,7 @@ struct Dwarf {
 
 #[pymethods]
 impl Dwarf {
+    /// Lookup a type corresponding to some NamedType and `name`.
     pub fn lookup_type(&mut self, py: Python<'_>, named_type: &NamedTypes,
                        name: String) -> PyResult<Option<PyObject>> {
         let obj = match named_type {
@@ -92,13 +94,15 @@ impl Dwarf {
         Ok(obj)
     }
 
-    pub fn get_named_type_dict(&self, py: Python<'_>, named_type: &NamedTypes)
+    /// Get a dictionary mapping names to types corresponding to some
+    /// NamedType
+    pub fn get_named_types_dict(&self, py: Python<'_>, named_type: &NamedTypes)
     -> PyResult<HashMap<String, PyObject>> {
         let mut type_map: HashMap<String, PyObject> = HashMap::new();
         match named_type {
             NamedTypes::Struct => {
                 let inner = self.inner.clone();
-                let found = inner.get_named_type_map::<crate::Struct>()?;
+                let found = inner.get_named_types_map::<crate::Struct>()?;
                 for (k,v) in found.into_iter() {
                     type_map.insert(k, Struct {
                         inner: v,
@@ -108,7 +112,7 @@ impl Dwarf {
             },
             NamedTypes::Enum => {
                 let inner = self.inner.clone();
-                let found = inner.get_named_type_map::<crate::Enum>()?;
+                let found = inner.get_named_types_map::<crate::Enum>()?;
                 for (k,v) in found.into_iter() {
                     type_map.insert(k, Enum {
                         inner: v,
@@ -118,7 +122,7 @@ impl Dwarf {
             },
             NamedTypes::Typedef => {
                 let inner = self.inner.clone();
-                let found = inner.get_named_type_map::<crate::Typedef>()?;
+                let found = inner.get_named_types_map::<crate::Typedef>()?;
                 for (k,v) in found.into_iter() {
                     type_map.insert(k, Typedef {
                         inner: v,
@@ -128,7 +132,7 @@ impl Dwarf {
             },
             NamedTypes::Union => {
                 let inner = self.inner.clone();
-                let found = inner.get_named_type_map::<crate::Union>()?;
+                let found = inner.get_named_types_map::<crate::Union>()?;
                 for (k,v) in found.into_iter() {
                     type_map.insert(k, Union {
                         inner: v,
@@ -138,7 +142,7 @@ impl Dwarf {
             },
             NamedTypes::Base => {
                 let inner = self.inner.clone();
-                let found = inner.get_named_type_map::<crate::Base>()?;
+                let found = inner.get_named_types_map::<crate::Base>()?;
                 for (k,v) in found.into_iter() {
                     type_map.insert(k, Base {
                         inner: v,
@@ -150,7 +154,8 @@ impl Dwarf {
         Ok(type_map)
     }
 
-    pub fn get_named_types_list(&self, py: Python<'_>, named_type: &NamedTypes)
+    /// Get a list of tuples of (name, type) corresponding to some NamedType.
+    pub fn get_named_types(&self, py: Python<'_>, named_type: &NamedTypes)
     -> PyResult<Vec<(String, PyObject)>> {
         let mut types: Vec<(String, PyObject)> = Vec::new();
         match named_type {
@@ -204,6 +209,7 @@ impl Dwarf {
     }
 }
 
+/// Load a DWARF file by path
 #[pyfunction]
 fn load_dwarf_path(path: PathBuf) -> PyResult<Dwarf> {
     let file = File::open(path)?;
@@ -212,6 +218,7 @@ fn load_dwarf_path(path: PathBuf) -> PyResult<Dwarf> {
     Ok(Dwarf { inner: Arc::new(dwarf) })
 }
 
+/// Load a DWARF file from a python File IO object
 #[pyfunction]
 fn load_dwarf(file: &PyAny) -> PyResult<Dwarf> {
     let fd: i32 = file.call_method0("fileno")?.extract()?;
@@ -234,8 +241,27 @@ fn load_dwarf(file: &PyAny) -> PyResult<Dwarf> {
 
 #[pymodule]
 fn dwat(_py: Python, m: &PyModule) -> PyResult<()> {
-    m.add_class::<NamedTypes>()?;
-    m.add_function(wrap_pyfunction!(load_dwarf_path, m)?)?;
+    m.add_class::<Dwarf>()?;
     m.add_function(wrap_pyfunction!(load_dwarf, m)?)?;
+    m.add_function(wrap_pyfunction!(load_dwarf_path, m)?)?;
+
+    m.add_class::<NamedTypes>()?;
+
+    m.add_class::<Member>()?;
+    m.add_class::<Parameter>()?;
+
+    // Types
+    m.add_class::<Struct>()?;
+    m.add_class::<Array>()?;
+    m.add_class::<Enum>()?;
+    m.add_class::<Pointer>()?;
+    m.add_class::<Subroutine>()?;
+    m.add_class::<Typedef>()?;
+    m.add_class::<Union>()?;
+    m.add_class::<Base>()?;
+    m.add_class::<Const>()?;
+    m.add_class::<Volatile>()?;
+    m.add_class::<Restrict>()?;
+
     Ok(())
 }
