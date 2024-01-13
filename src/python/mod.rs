@@ -218,8 +218,9 @@ fn load_dwarf_path(path: PathBuf) -> PyResult<Dwarf> {
     Ok(Dwarf { inner: Arc::new(dwarf) })
 }
 
-/// Load a DWARF file from a python File IO object
+/// Load a DWARF file from a python File IO object (unix only)
 #[pyfunction]
+#[cfg(target_family = "unix")]
 fn load_dwarf(file: &PyAny) -> PyResult<Dwarf> {
     let fd: i32 = file.call_method0("fileno")?.extract()?;
 
@@ -242,7 +243,10 @@ fn load_dwarf(file: &PyAny) -> PyResult<Dwarf> {
 #[pymodule]
 fn dwat(_py: Python, m: &PyModule) -> PyResult<()> {
     m.add_class::<Dwarf>()?;
+
+    #[cfg(target_family = "unix")]
     m.add_function(wrap_pyfunction!(load_dwarf, m)?)?;
+
     m.add_function(wrap_pyfunction!(load_dwarf_path, m)?)?;
 
     m.add_class::<NamedTypes>()?;
