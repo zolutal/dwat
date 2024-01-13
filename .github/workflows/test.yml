@@ -19,7 +19,7 @@ jobs:
           python-version: '3.9'
           cache: 'pip'
 
-      - run: pip install maturin pdoc
+      - run: python3 -m pip install maturin pdoc
 
       - run: python3 -m maturn build
 
