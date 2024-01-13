@@ -21,11 +21,11 @@ jobs:
 
       - run: pip install maturin pdoc
 
-      - run: maturn build
+      - run: python3 -m maturn build
 
       - run: pip install --no-index --find-links target/wheels/ dwat
 
-      - run: pdoc -o docs/ python_stubs/dwat
+      - run: python3 -m pdoc -o docs/ python_stubs/dwat
 
       - uses: actions/upload-pages-artifact@v1
         with:
