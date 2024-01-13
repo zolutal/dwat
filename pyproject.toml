@@ -24,6 +24,6 @@ authors = [
 ]
 
 [project.urls]
-homepage = "https://zolutal.github.io/dwat/"
-repository = "https://github.com/zolutal/dwat"
+Repository = "https://github.com/zolutal/dwat"
+Documentation = "https://zolutal.github.io/dwat/"
 
