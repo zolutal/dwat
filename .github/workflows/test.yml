@@ -19,13 +19,13 @@ jobs:
           python-version: '3.9'
           cache: 'pip'
 
-      - run: python3 -m pip install maturin pdoc
+      - run: pip install maturin pdoc
 
-      - run: python3 -m maturn build
+      - run: maturin build
 
       - run: pip install --no-index --find-links target/wheels/ dwat
 
-      - run: python3 -m pdoc -o docs/ python_stubs/dwat
+      - run: pdoc -o docs/ python_stubs/dwat
 
       - uses: actions/upload-pages-artifact@v1
         with:
