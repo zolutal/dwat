@@ -7,7 +7,7 @@ on:
     branches: [ "main" ]
 
 jobs:
-  pdocs:
+  build:
     runs-on: ubuntu-latest
 
     steps:
@@ -22,7 +22,6 @@ jobs:
       - run: pip install maturin pdoc
 
       - run: maturin build
-
       - run: pip install --no-index --find-links target/wheels/ dwat
 
       - run: pdoc -o docs/ python_stubs/dwat
