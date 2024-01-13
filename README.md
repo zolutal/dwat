@@ -30,6 +30,10 @@ Options:
   -h, --help  Print help
 ```
 
+# Python bindings
+
+`dwat` has python bindings! The documentation can be found here: https://zolutal.github.io/dwat/
+
 # Examples
 
 There are several examples in the `examples` directory that are worth checking out.
