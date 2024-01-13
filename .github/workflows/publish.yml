@@ -30,7 +30,7 @@ jobs:
           python-version: '3.9'
           cache: 'pip'
 
-      - run: pip install maturin pdoc
+      - run: pip install maturin pdoc typing
 
       - run: maturin build
       - run: pip install --no-index --find-links target/wheels/ dwat
