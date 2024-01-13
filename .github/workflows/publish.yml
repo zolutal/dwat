@@ -42,7 +42,6 @@ jobs:
           path: docs/
 
   deploy_pydocs:
-    if: github.ref == 'refs/heads/main'
     needs: build_pydocs
     runs-on: ubuntu-latest
     permissions:
