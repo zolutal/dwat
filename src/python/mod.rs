@@ -4,13 +4,15 @@ use pyo3::exceptions::PyValueError;
 use pyo3::wrap_pyfunction;
 use pyo3::prelude::*;
 
+#[cfg(target_family = "unix")]
 use std::os::unix::io::FromRawFd;
+use libc::dup;
+
 use std::collections::HashMap;
 use std::path::PathBuf;
 use std::sync::Arc;
 use std::fs::File;
 use memmap2::Mmap;
-use libc::dup;
 
 mod pytypes;
 use pytypes::NamedTypes;
