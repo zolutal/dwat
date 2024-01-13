@@ -18,7 +18,7 @@ jobs:
         env:
           CRATES_TOKEN: ${{ secrets.CRATES_TOKEN }}
 
-  pdocs:
+  build_pydocs:
     runs-on: ubuntu-latest
 
     steps:
@@ -32,8 +32,7 @@ jobs:
 
       - run: pip install maturin pdoc
 
-      - run: maturn build
-
+      - run: maturin build
       - run: pip install --no-index --find-links target/wheels/ dwat
 
       - run: pdoc -o docs/ python_stubs/dwat
@@ -41,3 +40,17 @@ jobs:
       - uses: actions/upload-pages-artifact@v1
         with:
           path: docs/
+
+  deploy_pydocs:
+    if: github.ref == 'refs/heads/main'
+    needs: build_pydocs
+    runs-on: ubuntu-latest
+    permissions:
+      pages: write
+      id-token: write
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    steps:
+      - id: deployment
+        uses: actions/deploy-pages@v2
