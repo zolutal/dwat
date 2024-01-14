@@ -1,6 +1,7 @@
 use pyo3::prelude::*;
 
 use crate::prelude::*;
+use crate::Error;
 use super::Dwarf;
 
 #[pyclass]
@@ -193,13 +194,13 @@ impl Struct {
     /// The name of the struct
     #[getter]
     pub fn name(&self) -> PyResult<Option<String>> {
-        attr_getter!(self, name, crate::Error::NameAttributeNotFound)
+        attr_getter!(self, name, Error::NameAttributeNotFound)
     }
 
     /// The size of this type in bytes
     #[getter]
     pub fn byte_size(&self) -> PyResult<Option<usize>> {
-        attr_getter!(self, byte_size, crate::Error::ByteSizeAttributeNotFound)
+        attr_getter!(self, byte_size, Error::ByteSizeAttributeNotFound)
     }
 
     /// A list of members/fields of this struct
@@ -237,7 +238,7 @@ impl Array {
     /// The size (footprint) of this type in bytes
     #[getter]
     pub fn byte_size(&self) -> PyResult<Option<usize>> {
-        attr_getter!(self, byte_size, crate::Error::ByteSizeAttributeNotFound)
+        attr_getter!(self, byte_size, Error::ByteSizeAttributeNotFound)
     }
 
     /// Retrieves the backing type of the array
@@ -263,13 +264,13 @@ impl Enum {
     /// The size of this type in bytes
     #[getter]
     pub fn byte_size(&self) -> PyResult<Option<usize>> {
-        attr_getter!(self, byte_size, crate::Error::ByteSizeAttributeNotFound)
+        attr_getter!(self, byte_size, Error::ByteSizeAttributeNotFound)
     }
 
     /// The name of the enum
     #[getter]
     pub fn name(&self) -> PyResult<Option<String>> {
-        attr_getter!(self, name, crate::Error::NameAttributeNotFound)
+        attr_getter!(self, name, Error::NameAttributeNotFound)
     }
 
     /// Retrieves the backing type of the enum
@@ -288,7 +289,7 @@ impl Pointer {
     /// The size of this type in bytes
     #[getter]
     pub fn byte_size(&self) -> PyResult<Option<usize>> {
-        attr_getter!(self, byte_size, crate::Error::ByteSizeAttributeNotFound)
+        attr_getter!(self, byte_size, Error::ByteSizeAttributeNotFound)
     }
 
     /// Retrieves the backing type of the pointer
@@ -344,13 +345,13 @@ impl Typedef {
     /// The name of the typedef
     #[getter]
     pub fn name(&self) -> PyResult<Option<String>> {
-        attr_getter!(self, name, crate::Error::NameAttributeNotFound)
+        attr_getter!(self, name, Error::NameAttributeNotFound)
     }
 
     /// The size of this type in bytes
     #[getter]
     pub fn byte_size(&self) -> PyResult<Option<usize>> {
-        attr_getter!(self, byte_size, crate::Error::ByteSizeAttributeNotFound)
+        attr_getter!(self, byte_size, Error::ByteSizeAttributeNotFound)
     }
 
     /// Retrieves the backing type of the typedef
@@ -377,13 +378,13 @@ impl Union {
     /// The name of the union
     #[getter]
     pub fn name(&self) -> PyResult<Option<String>> {
-        attr_getter!(self, name, crate::Error::NameAttributeNotFound)
+        attr_getter!(self, name, Error::NameAttributeNotFound)
     }
 
     /// The size of this type in bytes
     #[getter]
     pub fn byte_size(&self) -> PyResult<Option<usize>> {
-        attr_getter!(self, byte_size, crate::Error::ByteSizeAttributeNotFound)
+        attr_getter!(self, byte_size, Error::ByteSizeAttributeNotFound)
     }
 
     /// A list of members of this union
@@ -421,13 +422,13 @@ impl Base {
     /// The name of the base type
     #[getter]
     pub fn name(&self) -> PyResult<Option<String>> {
-        attr_getter!(self, name, crate::Error::NameAttributeNotFound)
+        attr_getter!(self, name, Error::NameAttributeNotFound)
     }
 
     /// The size of this type in bytes
     #[getter]
     pub fn byte_size(&self) -> PyResult<Option<usize>> {
-        attr_getter!(self, byte_size, crate::Error::ByteSizeAttributeNotFound)
+        attr_getter!(self, byte_size, Error::ByteSizeAttributeNotFound)
     }
 
     pub fn __str__(&self) -> PyResult<Option<String>> {
@@ -448,7 +449,7 @@ impl Const {
     /// The size of this type in bytes
     #[getter]
     pub fn byte_size(&self) -> PyResult<Option<usize>> {
-        attr_getter!(self, byte_size, crate::Error::ByteSizeAttributeNotFound)
+        attr_getter!(self, byte_size, Error::ByteSizeAttributeNotFound)
     }
 
     /// Retrieves the backing type of the const modifier
@@ -467,7 +468,7 @@ impl Volatile {
     /// The size of this type in bytes
     #[getter]
     pub fn byte_size(&self) -> PyResult<Option<usize>> {
-        attr_getter!(self, byte_size, crate::Error::ByteSizeAttributeNotFound)
+        attr_getter!(self, byte_size, Error::ByteSizeAttributeNotFound)
     }
 
     /// Retrieves the backing type of the volatile modifier
@@ -486,7 +487,7 @@ impl Restrict {
     /// The size of this type in bytes
     #[getter]
     pub fn byte_size(&self) -> PyResult<Option<usize>> {
-        attr_getter!(self, byte_size, crate::Error::ByteSizeAttributeNotFound)
+        attr_getter!(self, byte_size, Error::ByteSizeAttributeNotFound)
     }
 
     /// Retrieves the backing type of the restrict modifier
@@ -518,13 +519,25 @@ impl Member {
     /// The name of the member
     #[getter]
     pub fn name(&self) -> PyResult<Option<String>> {
-        attr_getter!(self, name, crate::Error::NameAttributeNotFound)
+        attr_getter!(self, name, Error::NameAttributeNotFound)
     }
 
     /// The size of this member in bytes
     #[getter]
     pub fn byte_size(&self) -> PyResult<Option<usize>> {
-        attr_getter!(self, byte_size, crate::Error::ByteSizeAttributeNotFound)
+        attr_getter!(self, byte_size, Error::ByteSizeAttributeNotFound)
+    }
+
+    /// The size of this member in bits (only present for bitfields)
+    #[getter]
+    pub fn bit_size(&self) -> PyResult<Option<usize>> {
+        attr_getter!(self, bit_size, Error::BitSizeAttributeNotFound)
+    }
+
+    /// The offset of this member from the start of the data type
+    #[getter]
+    pub fn offset(&self) -> PyResult<Option<usize>> {
+        attr_getter!(self, offset, Error::MemberLocationAttributeNotFound)
     }
 
     /// Retrieves the backing type of the member

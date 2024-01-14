@@ -117,6 +117,8 @@ class Member:
         Base | Const | Volatile | Restrict
     ]: ...
     byte_size: typing.Optional[int]
+    bit_size: typing.Optional[int]
+    offset: typing.Optional[str]
     name: typing.Optional[str]
 
 class Parameter:
