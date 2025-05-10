@@ -394,11 +394,11 @@ impl_inner_type!(Member);
 
 
 // DW_AT_byte_size : constant,exprloc,reference
-fn get_entry_byte_size(entry: &DIE) -> Result<Option<usize>, Error> {
+fn get_entry_byte_size(entry: &DIE) -> Result<usize, Error> {
     if let Ok(opt_attr) = entry.attr(gimli::DW_AT_byte_size) {
         if let Some(attr) = opt_attr {
             if let Some(attr_val) = attr.udata_value() {
-                return Ok(Some(attr_val as usize))
+                return Ok(attr_val as usize)
             }
             match attr.value() {
                 AttributeValue::Exprloc(_) => {
@@ -419,14 +419,14 @@ fn get_entry_byte_size(entry: &DIE) -> Result<Option<usize>, Error> {
 // Try to retrieve the alignment attribute if one exists, alignment was added
 // in DWARF 5 but gcc will inlcude it even for -gdwarf-4
 // DW_AT_alignment : constant
-fn get_entry_alignment(entry: &DIE) -> Result<Option<usize>, Error> {
+fn get_entry_alignment(entry: &DIE) -> Result<usize, Error> {
     if let Ok(opt_attr) = entry.attr(gimli::DW_AT_alignment) {
         if let Some(attr) = opt_attr {
             if let Some(alignment) = attr.udata_value() {
-                return Ok(Some(alignment as usize))
+                return Ok(alignment as usize)
             }
         } else {
-            return Ok(None)
+            return Err(Error::AlignmentAttributeNotFound)
         }
     }
     Err(Error::InvalidAttributeError)
@@ -812,16 +812,9 @@ impl Struct {
     }
 
     pub(crate) fn u_byte_size(&self, unit: &CU) -> Result<usize, Error> {
-        let entry_size = unit.entry_context(&self.location(), |entry| {
+        unit.entry_context(&self.location(), |entry| {
             get_entry_byte_size(entry)
-        })??;
-
-        if let Some(entry_size) = entry_size {
-            return Ok(entry_size)
-        }
-
-        // This should(?) be unreachable
-        Err(Error::ByteSizeAttributeNotFound)
+        })?
     }
 
     pub fn byte_size<D>(&self, dwarf: &D) -> Result<usize, Error>
@@ -832,15 +825,9 @@ impl Struct {
     }
 
     pub(crate) fn u_alignment(&self, unit: &CU) -> Result<usize, Error> {
-        let alignment = unit.entry_context(&self.location(), |entry| {
+        unit.entry_context(&self.location(), |entry| {
             get_entry_alignment(entry)
-        })??;
-
-        if let Some(alignment) = alignment {
-            return Ok(alignment)
-        }
-
-        Err(Error::AlignmentAttributeNotFound)
+        })?
     }
 
     pub fn alignment<D>(&self, dwarf: &D) -> Result<usize, Error>
@@ -887,10 +874,10 @@ impl Union {
     pub(crate) fn u_byte_size(&self, unit: &CU) -> Result<usize, Error> {
         let entry_size = unit.entry_context(&self.location(), |entry| {
             get_entry_byte_size(entry)
-        })??;
+        })?;
 
-        if let Some(entry_size) = entry_size {
-            return Ok(entry_size);
+        if entry_size.is_ok() {
+            return entry_size
         }
 
         // if there was no byte_size attribute, need to loop over all the
@@ -925,10 +912,10 @@ impl Enum {
     pub(crate) fn u_byte_size(&self, unit: &CU) -> Result<usize, Error> {
         let entry_size = unit.entry_context(&self.location(), |entry| {
             get_entry_byte_size(entry)
-        })??;
+        })?;
 
-        if let Some(entry_size) = entry_size {
-            return Ok(entry_size);
+        if entry_size.is_ok() {
+            return entry_size
         }
 
         self.u_get_type(unit)?.u_byte_size(unit)
@@ -968,15 +955,9 @@ impl Pointer {
 
 impl Base {
     pub(crate) fn u_byte_size(&self, unit: &CU) -> Result<usize, Error> {
-        let entry_size = unit.entry_context(&self.location(), |entry| {
+        unit.entry_context(&self.location(), |entry| {
             get_entry_byte_size(entry)
-        })??;
-
-        if let Some(entry_size) = entry_size {
-            Ok(entry_size)
-        } else {
-            Err(Error::ByteSizeAttributeNotFound)
-        }
+        })?
     }
 
     // if a base type doesn't have a size something is horribly wrong
@@ -995,14 +976,6 @@ impl Typedef {
     }
 
     pub(crate) fn u_byte_size(&self, unit: &CU) -> Result<usize, Error> {
-        let entry_size = unit.entry_context(&self.location(), |entry| {
-            get_entry_byte_size(entry)
-        })??;
-
-        if let Some(entry_size) = entry_size {
-            return Ok(entry_size);
-        }
-
         let inner_type = self.u_get_type(unit)?;
         inner_type.u_byte_size(unit)
     }
@@ -1023,10 +996,10 @@ impl Const {
     pub(crate) fn u_byte_size(&self, unit: &CU) -> Result<usize, Error> {
         let entry_size = unit.entry_context(&self.location(), |entry| {
             get_entry_byte_size(entry)
-        })??;
+        })?;
 
-        if let Some(entry_size) = entry_size {
-            return Ok(entry_size);
+        if entry_size.is_ok() {
+            return entry_size
         }
 
         let inner_type = self.u_get_type(unit)?;
@@ -1047,14 +1020,6 @@ impl Volatile {
     }
 
     pub(crate) fn u_byte_size(&self, unit: &CU) -> Result<usize, Error> {
-        let entry_size = unit.entry_context(&self.location(), |entry| {
-            get_entry_byte_size(entry)
-        })??;
-
-        if let Some(entry_size) = entry_size {
-            return Ok(entry_size);
-        }
-
         let inner_type = self.u_get_type(unit)?;
         inner_type.u_byte_size(unit)
     }
@@ -1073,14 +1038,6 @@ impl Restrict {
     }
 
     pub(crate) fn u_byte_size(&self, unit: &CU) -> Result<usize, Error> {
-        let entry_size = unit.entry_context(&self.location(), |entry| {
-            get_entry_byte_size(entry)
-        })??;
-
-        if let Some(entry_size) = entry_size {
-            return Ok(entry_size);
-        }
-
         let inner_type = self.u_get_type(unit)?;
         inner_type.u_byte_size(unit)
     }
@@ -1188,10 +1145,10 @@ impl Array {
     pub(crate) fn u_byte_size(&self, unit: &CU) -> Result<usize, Error> {
         let byte_size = unit.entry_context(&self.location(), |entry| {
             get_entry_byte_size(entry)
-        })??;
+        })?;
 
-        if let Some(byte_size) = byte_size {
-            return Ok(byte_size);
+        if byte_size.is_ok() {
+            return byte_size
         }
 
         let inner_size = self.u_entry_size(unit)?;
