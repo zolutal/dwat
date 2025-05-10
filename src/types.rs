@@ -219,59 +219,28 @@ where D: DwarfContext + BorrowableDwarf {
 }
 
 // Try to retrieve the name attribute as a string for a DIE if one exists
-pub(crate) fn get_entry_name<D>(dwarf: &D, entry: &DIE) -> Option<String>
+pub(crate) fn get_entry_name<D>(dwarf: &D, entry: &DIE) -> Result<String, Error>
 where D: DwarfContext + BorrowableDwarf {
-    let mut attrs = entry.attrs();
-    while let Ok(Some(attr)) = &attrs.next() {
-        if attr.name() == gimli::DW_AT_name {
-            match attr.value() {
-                gimli::AttributeValue::String(str) => {
-                    if let Ok(str) = str.to_string() {
-                        return Some(str.to_string())
-                    }
+    if let Ok(attr_val) = entry.attr_value(gimli::DW_AT_name) {
+        match attr_val {
+            Some(AttributeValue::String(str)) => {
+                if let Ok(str) = str.to_string() {
+                    return Ok(str.to_string())
                 }
-                gimli::AttributeValue::DebugStrRef(strref) => {
-                    return from_dbg_str_ref(dwarf, strref)
+            },
+            Some(AttributeValue::DebugStrRef(strref)) => {
+                if let Some(str) = from_dbg_str_ref(dwarf, strref) {
+                    return Ok(str)
                 }
-                _ => { }
-            };
+            },
+            None => {
+                return Err(Error::NameAttributeNotFound)
+            },
+            _ => {}
         }
     }
-    None
+    Err(Error::InvalidAttributeError)
 }
-
-// // Try to retrieve a string from the debug_str section for a given offset
-// pub(crate) fn owned_from_dbg_str_ref(dwarf: &OwnedDwarf, str_ref: DebugStrOffset<usize>)
-// -> Option<String> {
-//     dwarf.borrow_dwarf(|dwarf| {
-//         if let Ok(str_ref) = dwarf.debug_str.get_str(str_ref) {
-//             let str_ref = str_ref.to_string_lossy();
-//             return Some(str_ref.to_string());
-//         }
-//         None
-//     })
-// }
-//
-// // Try to retrieve the name attribute as a string for a DIE if one exists
-// pub(crate) fn owned_get_entry_name(dwarf: &OwnedDwarf, entry: &DIE) -> Option<String> {
-//     let mut attrs = entry.attrs();
-//     while let Ok(Some(attr)) = &attrs.next() {
-//         if attr.name() == gimli::DW_AT_name {
-//             match attr.value() {
-//                 gimli::AttributeValue::String(str) => {
-//                     if let Ok(str) = str.to_string() {
-//                         return Some(str.to_string())
-//                     }
-//                 }
-//                 gimli::AttributeValue::DebugStrRef(strref) => {
-//                     return owned_from_dbg_str_ref(dwarf, strref)
-//                 }
-//                 _ => { }
-//             };
-//         }
-//     }
-//     None
-// }
 
 /// force UnitNamedType trait to be private
 pub(crate) mod unit_name_type {
@@ -284,13 +253,9 @@ pub(crate) mod unit_name_type {
 
         fn u_name<D>(&self, dwarf: &D, unit: &CU) -> Result<String, Error>
         where D: DwarfContext + BorrowableDwarf {
-            if let Some(name) = unit.entry_context(&self.location(), |entry| {
+            unit.entry_context(&self.location(), |entry| {
                 get_entry_name(dwarf, entry)
-            })? {
-                Ok(name)
-            } else {
-                Err(Error::NameAttributeNotFound)
-            }
+            })?
         }
     }
 }
@@ -371,24 +336,24 @@ pub(crate) mod unit_inner_type {
     pub trait UnitInnerType {
         fn location(&self) -> Location;
 
+        // DW_AT_type : reference
         fn u_get_type(&self, unit: &CU) -> Result<Type, Error> {
-            unit.entry_context(&self.location().clone(), |entry|
-            -> Result<Type, Error> {
-                let mut attrs = entry.attrs();
-                while let Ok(Some(attr)) = attrs.next() {
-                    if attr.name() == gimli::DW_AT_type {
-                        if let AttributeValue::UnitRef(offset) = attr.value() {
-                            let type_loc = Location {
-                                header: self.location().header,
-                                offset,
-                            };
-                            return unit.entry_context(&type_loc, |entry| {
-                                entry_to_type(type_loc, entry)
-                            })?
-                        }
-                    };
-                };
-                Err(Error::TypeAttributeNotFound)
+            unit.entry_context(&self.location(), |entry| {
+                if let Ok(attr_val) = entry.attr_value(gimli::DW_AT_type) {
+                    if let Some(AttributeValue::UnitRef(offset)) = attr_val {
+                        let type_loc = Location {
+                            header: self.location().header,
+                            offset,
+                        };
+                        return unit.entry_context(&type_loc, |entry| {
+                            entry_to_type(type_loc, entry)
+                        })?
+                    } else {
+                        Err(Error::TypeAttributeNotFound)
+                    }
+                } else {
+                    Err(Error::InvalidAttributeError)
+                }
             })?
         }
     }
@@ -428,36 +393,43 @@ impl_inner_type!(Enum);
 impl_inner_type!(Member);
 
 
-fn get_entry_bit_size(entry: &DIE) -> Option<usize> {
-    let mut attrs = entry.attrs();
-    while let Ok(Some(attr)) = &attrs.next() {
-        if attr.name() == gimli::DW_AT_bit_size {
-            return attr.udata_value().map(|v| v as usize)
+// DW_AT_byte_size : constant,exprloc,reference
+fn get_entry_byte_size(entry: &DIE) -> Result<Option<usize>, Error> {
+    if let Ok(opt_attr) = entry.attr(gimli::DW_AT_byte_size) {
+        if let Some(attr) = opt_attr {
+            if let Some(attr_val) = attr.udata_value() {
+                return Ok(Some(attr_val as usize))
+            }
+            match attr.value() {
+                AttributeValue::Exprloc(_) => {
+                    return Err(Error::UnimplementedError("byte_size with exprloc value".into()))
+                },
+                AttributeValue::LocationListsRef(_) => {
+                    return Err(Error::UnimplementedError("byte_size with loclist value".into()))
+                },
+                _ => { }
+            }
+        } else {
+            return Err(Error::ByteSizeAttributeNotFound)
         }
     }
-    None
-}
-
-fn get_entry_byte_size(entry: &DIE) -> Option<usize> {
-    let mut attrs = entry.attrs();
-    while let Ok(Some(attr)) = &attrs.next() {
-        if attr.name() == gimli::DW_AT_byte_size {
-            return attr.udata_value().map(|v| v as usize)
-        }
-    }
-    None
+    Err(Error::InvalidAttributeError)
 }
 
 // Try to retrieve the alignment attribute if one exists, alignment was added
 // in DWARF 5 but gcc will inlcude it even for -gdwarf-4
-fn get_entry_alignment(entry: &DIE) -> Option<usize> {
-    let mut attrs = entry.attrs();
-    while let Ok(Some(attr)) = &attrs.next() {
-        if attr.name() == gimli::DW_AT_alignment {
-            return attr.udata_value().map(|v| v as usize)
+// DW_AT_alignment : constant
+fn get_entry_alignment(entry: &DIE) -> Result<Option<usize>, Error> {
+    if let Ok(opt_attr) = entry.attr(gimli::DW_AT_alignment) {
+        if let Some(attr) = opt_attr {
+            if let Some(alignment) = attr.udata_value() {
+                return Ok(Some(alignment as usize))
+            }
+        } else {
+            return Ok(None)
         }
     }
-    None
+    Err(Error::InvalidAttributeError)
 }
 
 
@@ -540,7 +512,7 @@ fn entry_to_type(location: Location, entry: &DIE) -> Result<Type, Error> {
         },
         _ => {
             return Err(Error::UnimplementedError(
-                    "entry_to_type, unhandled dwarf type".to_string()
+                "entry_to_type, unhandled dwarf type".to_string()
             ));
         }
     };
@@ -548,17 +520,32 @@ fn entry_to_type(location: Location, entry: &DIE) -> Result<Type, Error> {
 }
 
 impl Member {
+    // DW_AT_data_member_location : constant,exprloc,loclist
     pub(crate) fn u_bit_size(&self, unit: &CU) -> Result<usize, Error> {
-        let bit_size = unit.entry_context(&self.location, |entry| {
-            get_entry_bit_size(entry)
-        })?;
-        if let Some(bit_size) = bit_size {
-            Ok(bit_size)
-        } else {
-            Err(Error::BitSizeAttributeNotFound)
-        }
+        unit.entry_context(&self.location, |entry| {
+            if let Ok(opt_attr) = entry.attr(gimli::DW_AT_bit_size) {
+                if let Some(attr) = opt_attr {
+                    if let Some(attr_val) = attr.udata_value() {
+                        return Ok(attr_val as usize)
+                    }
+                    match attr.value() {
+                        AttributeValue::Exprloc(_) => {
+                            return Err(Error::UnimplementedError("bit_size with exprloc value".into()))
+                        },
+                        AttributeValue::LocationListsRef(_) => {
+                            return Err(Error::UnimplementedError("bit_size with loclist value".into()))
+                        },
+                        _ => { }
+                    }
+                } else {
+                    return Err(Error::BitSizeAttributeNotFound)
+                }
+            }
+            Err(Error::InvalidAttributeError)
+        })?
     }
 
+    /// The size of a member in bits
     pub fn bit_size<D>(&self, dwarf: &D) -> Result<usize, Error>
     where D: DwarfContext {
         dwarf.unit_context(&self.location, |unit| {
@@ -578,24 +565,29 @@ impl Member {
         })?
     }
 
+    // DW_AT_data_member_location : constant,exprloc,loclist
     pub(crate) fn u_member_location(&self, unit: &CU) -> Result<usize, Error> {
-        let member_location = unit.entry_context(&self.location, |entry| {
-            let mut attrs = entry.attrs();
-            while let Ok(Some(attr)) = &attrs.next() {
-                if attr.name() == gimli::DW_AT_data_member_location {
-                    if let gimli::AttributeValue::Udata(v) = attr.value() {
-                        return Some(v as usize);
+        unit.entry_context(&self.location, |entry| {
+            if let Ok(opt_attr) = entry.attr(gimli::DW_AT_data_member_location) {
+                if let Some(attr) = opt_attr {
+                    if let Some(attr_val) = attr.udata_value() {
+                        return Ok(attr_val as usize)
                     }
+                    match attr.value() {
+                        AttributeValue::Exprloc(_) => {
+                            return Err(Error::UnimplementedError("member_location with exprloc value".into()))
+                        },
+                        AttributeValue::LocationListsRef(_) => {
+                            return Err(Error::UnimplementedError("member_location with loclist value".into()))
+                        },
+                        _ => { }
+                    }
+                } else {
+                    return Err(Error::MemberLocationAttributeNotFound)
                 }
             }
-            None
-        })?;
-
-        if let Some(member_location) = member_location {
-            Ok(member_location)
-        } else {
-            Err(Error::MemberLocationAttributeNotFound)
-        }
+            Err(Error::InvalidAttributeError)
+        })?
     }
 
     /// The byte offset of the member from the start of the datatype
@@ -822,7 +814,7 @@ impl Struct {
     pub(crate) fn u_byte_size(&self, unit: &CU) -> Result<usize, Error> {
         let entry_size = unit.entry_context(&self.location(), |entry| {
             get_entry_byte_size(entry)
-        })?;
+        })??;
 
         if let Some(entry_size) = entry_size {
             return Ok(entry_size)
@@ -842,7 +834,7 @@ impl Struct {
     pub(crate) fn u_alignment(&self, unit: &CU) -> Result<usize, Error> {
         let alignment = unit.entry_context(&self.location(), |entry| {
             get_entry_alignment(entry)
-        })?;
+        })??;
 
         if let Some(alignment) = alignment {
             return Ok(alignment)
@@ -895,7 +887,7 @@ impl Union {
     pub(crate) fn u_byte_size(&self, unit: &CU) -> Result<usize, Error> {
         let entry_size = unit.entry_context(&self.location(), |entry| {
             get_entry_byte_size(entry)
-        })?;
+        })??;
 
         if let Some(entry_size) = entry_size {
             return Ok(entry_size);
@@ -933,7 +925,7 @@ impl Enum {
     pub(crate) fn u_byte_size(&self, unit: &CU) -> Result<usize, Error> {
         let entry_size = unit.entry_context(&self.location(), |entry| {
             get_entry_byte_size(entry)
-        })?;
+        })??;
 
         if let Some(entry_size) = entry_size {
             return Ok(entry_size);
@@ -978,7 +970,7 @@ impl Base {
     pub(crate) fn u_byte_size(&self, unit: &CU) -> Result<usize, Error> {
         let entry_size = unit.entry_context(&self.location(), |entry| {
             get_entry_byte_size(entry)
-        })?;
+        })??;
 
         if let Some(entry_size) = entry_size {
             Ok(entry_size)
@@ -1005,7 +997,7 @@ impl Typedef {
     pub(crate) fn u_byte_size(&self, unit: &CU) -> Result<usize, Error> {
         let entry_size = unit.entry_context(&self.location(), |entry| {
             get_entry_byte_size(entry)
-        })?;
+        })??;
 
         if let Some(entry_size) = entry_size {
             return Ok(entry_size);
@@ -1031,7 +1023,7 @@ impl Const {
     pub(crate) fn u_byte_size(&self, unit: &CU) -> Result<usize, Error> {
         let entry_size = unit.entry_context(&self.location(), |entry| {
             get_entry_byte_size(entry)
-        })?;
+        })??;
 
         if let Some(entry_size) = entry_size {
             return Ok(entry_size);
@@ -1057,7 +1049,7 @@ impl Volatile {
     pub(crate) fn u_byte_size(&self, unit: &CU) -> Result<usize, Error> {
         let entry_size = unit.entry_context(&self.location(), |entry| {
             get_entry_byte_size(entry)
-        })?;
+        })??;
 
         if let Some(entry_size) = entry_size {
             return Ok(entry_size);
@@ -1083,7 +1075,7 @@ impl Restrict {
     pub(crate) fn u_byte_size(&self, unit: &CU) -> Result<usize, Error> {
         let entry_size = unit.entry_context(&self.location(), |entry| {
             get_entry_byte_size(entry)
-        })?;
+        })??;
 
         if let Some(entry_size) = entry_size {
             return Ok(entry_size);
@@ -1126,19 +1118,48 @@ impl Array {
             if entry.tag() != gimli::DW_TAG_subrange_type {
                 break;
             }
-            let mut attrs = entry.attrs();
-            while let Ok(Some(attr)) = attrs.next() {
-                if attr.name() == gimli::DW_AT_upper_bound {
-                    if let Some(val) = attr.udata_value() {
-                        return Ok((val + 1) as usize);
+
+            if let Ok(opt_attr) = entry.attr(gimli::DW_AT_upper_bound) {
+                if let Some(attr) = opt_attr {
+                    if let Some(attr_val) = attr.udata_value() {
+                        return Ok((attr_val + 1) as usize)
                     }
-                };
-                if attr.name() == gimli::DW_AT_count {
-                    if let Some(val) = attr.udata_value() {
-                        return Ok(val as usize);
+                    match attr.value() {
+                        AttributeValue::Exprloc(_) => {
+                            return Err(Error::UnimplementedError("upper_bound with exprloc value".into()))
+                        },
+                        AttributeValue::LocationListsRef(_) => {
+                            return Err(Error::UnimplementedError("upper_bound with loclist value".into()))
+                        },
+                        _ => {
+                            return Err(Error::InvalidAttributeError)
+                        }
                     }
-                };
-            };
+                }
+            } else {
+                return Err(Error::InvalidAttributeError)
+            }
+
+            if let Ok(opt_attr) = entry.attr(gimli::DW_AT_count) {
+                if let Some(attr) = opt_attr {
+                    if let Some(attr_val) = attr.udata_value() {
+                        return Ok(attr_val as usize)
+                    }
+                    match attr.value() {
+                        AttributeValue::Exprloc(_) => {
+                            return Err(Error::UnimplementedError("count with exprloc value".into()))
+                        },
+                        AttributeValue::LocationListsRef(_) => {
+                            return Err(Error::UnimplementedError("count with loclist value".into()))
+                        },
+                        _ => {
+                            return Err(Error::InvalidAttributeError)
+                        }
+                    }
+                }
+            } else {
+                return Err(Error::InvalidAttributeError)
+            }
         };
         Ok(bound)
     }
@@ -1167,7 +1188,7 @@ impl Array {
     pub(crate) fn u_byte_size(&self, unit: &CU) -> Result<usize, Error> {
         let byte_size = unit.entry_context(&self.location(), |entry| {
             get_entry_byte_size(entry)
-        })?;
+        })??;
 
         if let Some(byte_size) = byte_size {
             return Ok(byte_size);

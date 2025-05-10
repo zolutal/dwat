@@ -43,11 +43,8 @@ where F: FnMut(&CU, &DIE, Location) -> Result<bool, Error> {
                 continue;
             }
 
-            let mut attrs = entry.attrs();
-            while let Ok(Some(attr)) = attrs.next() {
-                if attr.name() == gimli::DW_AT_declaration {
-                    continue 'entries
-                }
+            if let Ok(Some(_)) = entry.attr(gimli::DW_AT_declaration) {
+                continue 'entries
             }
 
             let header_offset =
@@ -123,7 +120,7 @@ where Self: Sized + DwarfContext {
         let mut item: Option<T> = None;
         self.borrow_dwarf(|dwarf| {
             let _ = for_each_die::<T, _>(dwarf, |_, entry, loc| {
-                if let Some(entry_name) = get_entry_name(self, entry) {
+                if let Ok(entry_name) = get_entry_name(self, entry) {
                     if name == entry_name {
                         item = Some(T::new(loc));
                         return Ok(true);
@@ -141,7 +138,7 @@ where Self: Sized + DwarfContext {
         let mut item_locations: HashMap<String, T> = HashMap::new();
         self.borrow_dwarf(|dwarf| {
             let _ = for_each_die::<T, _>(dwarf, |_unit, entry, loc| {
-                 if let Some(name) = get_entry_name(self, entry) {
+                 if let Ok(name) = get_entry_name(self, entry) {
                     let typ = T::new(loc);
                     item_locations.insert(name, typ);
                  }
@@ -161,7 +158,7 @@ where Self: Sized + DwarfContext {
         };
         self.borrow_dwarf(|dwarf| {
             let _ = for_each_die::<Struct, _>(dwarf, |unit, entry, loc| {
-                if let Some(name) = get_entry_name(self, entry) {
+                if let Ok(name) = get_entry_name(self, entry) {
                     let typ = Struct::new(loc);
                     let byte_size = typ.u_byte_size(unit)?;
                     let members: Vec<(String,usize)> = {
@@ -187,7 +184,7 @@ where Self: Sized + DwarfContext {
         let mut items: Vec<(String, T)> = Vec::new();
         self.borrow_dwarf(|dwarf| {
             let _ = for_each_die::<T, _>(dwarf, |_, entry, loc| {
-                if let Some(name) = get_entry_name(self, entry) {
+                if let Ok(name) = get_entry_name(self, entry) {
                     let typ = T::new(loc);
                     items.push((name, typ));
                 }

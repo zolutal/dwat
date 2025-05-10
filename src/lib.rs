@@ -50,6 +50,9 @@ pub enum Error {
     #[error("failed due to unimplemented functionality")]
     UnimplementedError(String),
 
+    #[error("failed due to an invalid attribute")]
+    InvalidAttributeError,
+
     // Non-Fatal
     #[error("failure when attempting to find a Name Attribute")]
     NameAttributeNotFound,
