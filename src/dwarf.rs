@@ -6,13 +6,16 @@ use gimli::RunTimeEndian;
 use crate::dwarf::borrowable_dwarf::BorrowableDwarf;
 use crate::unit_has_members::UnitHasMembers;
 use crate::unit_name_type::UnitNamedType;
-use crate::{DIE, CU, GimliDwarf};
-// use crate::owned_get_entry_name;
 use crate::get_entry_name;
-use crate::Location;
 use crate::Tagged;
 use crate::Struct;
 use crate::Error;
+
+// Abbreviations for some lengthy gimli types
+pub(crate) type R<'a> = gimli::EndianSlice<'a, RunTimeEndian>;
+pub(crate) type GimliDIE<'a> = gimli::DebuggingInformationEntry<'a,'a,R<'a>,usize>;
+pub(crate) type GimliCU<'a> = gimli::Unit<R<'a>, usize>;
+pub(crate) type GimliDwarf<'a> = gimli::Dwarf<R<'a>>;
 
 /// A struct to hold the HashMap key for `get_named_structs_map`
 #[derive(Eq, Hash, PartialEq)]
@@ -27,9 +30,9 @@ pub struct StructHashKey {
     pub members: Vec<(String, usize)>
 }
 
-fn for_each_die<T: Tagged, F>(dwarf: &GimliDwarf, mut f: F)
+fn for_each_tagged_entry<T: Tagged, F>(dwarf: &GimliDwarf, mut f: F)
 -> Result<(), Error>
-where F: FnMut(&CU, &DIE, Location) -> Result<bool, Error> {
+where F: FnMut(&GimliCU, &GimliDIE, DwarfUnit) -> Result<bool, Error> {
     let mut unit_headers = dwarf.debug_info.units();
     while let Ok(Some(header)) = unit_headers.next() {
         let unit = match dwarf.unit(header) {
@@ -37,14 +40,9 @@ where F: FnMut(&CU, &DIE, Location) -> Result<bool, Error> {
             Err(_) => continue
         };
         let mut entries = unit.entries();
-        'entries:
         while let Ok(Some((_delta_depth, entry))) = entries.next_dfs() {
             if entry.tag() != T::tag() {
                 continue;
-            }
-
-            if let Ok(Some(_)) = entry.attr(gimli::DW_AT_declaration) {
-                continue 'entries
             }
 
             let header_offset =
@@ -54,13 +52,13 @@ where F: FnMut(&CU, &DIE, Location) -> Result<bool, Error> {
                     None => return Err(Error::HeaderOffsetError)
             };
 
-            let location = Location {
-                header: header_offset,
-                offset: entry.offset(),
+            let unit_pos = DwarfUnit {
+                die_offset: header_offset,
+                entry_offset: entry.offset(),
             };
 
             // return if function returns true
-            if f(&unit, entry, location)? {
+            if f(&unit, entry, unit_pos)? {
                 return Ok(())
             }
         }
@@ -102,14 +100,13 @@ impl<'a> Dwarf<'a> {
 }
 
 pub(crate) mod borrowable_dwarf {
-    use crate::GimliDwarf;
+    use crate::dwarf::GimliDwarf;
 
     pub trait BorrowableDwarf {
         fn borrow_dwarf<F,R>(&self, f: F) -> R
         where F: FnOnce(&GimliDwarf) -> R;
     }
 }
-
 
 pub trait DwarfLookups : borrowable_dwarf::BorrowableDwarf
 where Self: Sized + DwarfContext {
@@ -119,7 +116,7 @@ where Self: Sized + DwarfContext {
     -> Result<Option<T>, Error> {
         let mut item: Option<T> = None;
         self.borrow_dwarf(|dwarf| {
-            let _ = for_each_die::<T, _>(dwarf, |_, entry, loc| {
+            let _ = for_each_tagged_entry::<T, _>(dwarf, |_, entry, loc| {
                 if let Ok(entry_name) = get_entry_name(self, entry) {
                     if name == entry_name {
                         item = Some(T::new(loc));
@@ -137,11 +134,15 @@ where Self: Sized + DwarfContext {
     -> Result<HashMap<String, T>, Error> {
         let mut item_locations: HashMap<String, T> = HashMap::new();
         self.borrow_dwarf(|dwarf| {
-            let _ = for_each_die::<T, _>(dwarf, |_unit, entry, loc| {
-                 if let Ok(name) = get_entry_name(self, entry) {
-                    let typ = T::new(loc);
-                    item_locations.insert(name, typ);
-                 }
+            let _ = for_each_tagged_entry::<T, _>(dwarf, |_unit, entry, loc| {
+                if let Ok(Some(_)) = entry.attr(gimli::DW_AT_declaration) {
+                    return Ok(false)
+                }
+
+                if let Ok(name) = get_entry_name(self, entry) {
+                   let typ = T::new(loc);
+                   item_locations.insert(name, typ);
+                }
                 Ok(false)
             });
         });
@@ -157,7 +158,11 @@ where Self: Sized + DwarfContext {
             HashMap::new()
         };
         self.borrow_dwarf(|dwarf| {
-            let _ = for_each_die::<Struct, _>(dwarf, |unit, entry, loc| {
+            let _ = for_each_tagged_entry::<Struct, _>(dwarf, |unit, entry, loc| {
+                if let Ok(Some(_)) = entry.attr(gimli::DW_AT_declaration) {
+                    return Ok(false)
+                }
+
                 if let Ok(name) = get_entry_name(self, entry) {
                     let typ = Struct::new(loc);
                     let byte_size = typ.u_byte_size(unit)?;
@@ -178,12 +183,26 @@ where Self: Sized + DwarfContext {
         Ok(struct_locations)
     }
 
-    /// Get a vector of all debug info of some type by name
+    /// Get a vector of all units of some tag
+    fn get_units<T: Tagged>(&self)
+    -> Result<Vec<T>, Error> {
+        let mut items: Vec<T> = Vec::new();
+        self.borrow_dwarf(|dwarf| {
+            let _ = for_each_tagged_entry::<T, _>(dwarf, |_, _, loc| {
+                let typ = T::new(loc);
+                items.push(typ);
+                Ok(false)
+            });
+        });
+        Ok(items)
+    }
+
+    /// Get a vector of all debug info of some type with names
     fn get_named_types<T: Tagged>(&self)
     -> Result<Vec<(String, T)>, Error> {
         let mut items: Vec<(String, T)> = Vec::new();
         self.borrow_dwarf(|dwarf| {
-            let _ = for_each_die::<T, _>(dwarf, |_, entry, loc| {
+            let _ = for_each_tagged_entry::<T, _>(dwarf, |_, entry, loc| {
                 if let Ok(name) = get_entry_name(self, entry) {
                     let typ = T::new(loc);
                     items.push((name, typ));
@@ -264,23 +283,23 @@ impl borrowable_dwarf::BorrowableDwarf for Dwarf<'_> {
 /// use Dwarf.unit_context to obtain a CU once and pass that CU to the 'u_'
 // variants of the parsing methods as many times as necessary
 pub trait DwarfContext {
-    fn entry_context<F,R>(&self, loc: &Location, f: F) -> Result<R, Error>
-    where F: FnOnce(&DIE) -> R;
+    fn entry_context<F,R>(&self, unit_pos: &DwarfUnit, f: F) -> Result<R, Error>
+    where F: FnOnce(&GimliDIE) -> R;
 
-    fn unit_context<F,R>(&self, loc: &Location, f: F) -> Result<R, Error>
-    where F: FnOnce(&CU) -> R;
+    fn unit_context<F,R>(&self, unit_pos: &DwarfUnit, f: F) -> Result<R, Error>
+    where F: FnOnce(&GimliCU) -> R;
 }
 
 impl DwarfContext for Dwarf<'_> {
-    fn entry_context<F,R>(&self, loc: &Location, f: F) -> Result<R, Error>
-    where F: FnOnce(&DIE) -> R {
-        self.unit_context(loc, |unit| -> Result<R, Error> {
-            let entry = match unit.entry(loc.offset) {
+    fn entry_context<F,R>(&self, unit_pos: &DwarfUnit, f: F) -> Result<R, Error>
+    where F: FnOnce(&GimliDIE) -> R {
+        self.unit_context(unit_pos, |unit| -> Result<R, Error> {
+            let entry = match unit.entry(unit_pos.entry_offset) {
                 Ok(entry) => entry,
                 Err(_) => {
                     return Err(
                         Error::DIEError(
-                            format!("Failed to find DIE at location: {loc:?}")
+                            format!("Failed to find DIE at location: {unit_pos:?}")
                         )
                     );
                 }
@@ -289,11 +308,11 @@ impl DwarfContext for Dwarf<'_> {
         })?
     }
 
-    fn unit_context<F,R>(&self, loc: &Location, f: F) -> Result<R, Error>
-    where F: FnOnce(&CU) -> R {
+    fn unit_context<F,R>(&self, unit_pos: &DwarfUnit, f: F) -> Result<R, Error>
+    where F: FnOnce(&GimliCU) -> R {
         self.borrow_dwarf(|dwarf| {
             let debug_info = dwarf.debug_info;
-            let unit_header = match debug_info.header_from_offset(loc.header) {
+            let unit_header = match debug_info.header_from_offset(unit_pos.die_offset) {
                 Ok(header) => header,
                 Err(e) => return Err(
                     Error::CUError(
@@ -307,15 +326,15 @@ impl DwarfContext for Dwarf<'_> {
 }
 
 impl DwarfContext for OwnedDwarf {
-    fn entry_context<F,R>(&self, loc: &Location, f: F) -> Result<R, Error>
-    where F: FnOnce(&DIE) -> R {
-        self.unit_context(loc, |unit| -> Result<R, Error> {
-            let entry = match unit.entry(loc.offset) {
+    fn entry_context<F,R>(&self, unit_pos: &DwarfUnit, f: F) -> Result<R, Error>
+    where F: FnOnce(&GimliDIE) -> R {
+        self.unit_context(unit_pos, |unit| -> Result<R, Error> {
+            let entry = match unit.entry(unit_pos.entry_offset) {
                 Ok(entry) => entry,
                 Err(_) => {
                     return Err(
                         Error::DIEError(
-                            format!("Failed to find DIE at location: {loc:?}")
+                            format!("Failed to find DIE at location: {unit_pos:?}")
                         )
                     );
                 }
@@ -324,11 +343,11 @@ impl DwarfContext for OwnedDwarf {
         })?
     }
 
-    fn unit_context<F,R>(&self, loc: &Location, f: F) -> Result<R, Error>
-    where F: FnOnce(&CU) -> R {
+    fn unit_context<F,R>(&self, unit_pos: &DwarfUnit, f: F) -> Result<R, Error>
+    where F: FnOnce(&GimliCU) -> R {
         self.borrow_dwarf(|dwarf| {
             let debug_info = dwarf.debug_info;
-            let unit_header = match debug_info.header_from_offset(loc.header) {
+            let unit_header = match debug_info.header_from_offset(unit_pos.die_offset) {
                 Ok(header) => header,
                 Err(e) => return Err(
                     Error::CUError(
@@ -341,15 +360,15 @@ impl DwarfContext for OwnedDwarf {
     }
 }
 
-impl DwarfContext for CU<'_> {
-    fn entry_context<F,R>(&self, loc: &Location, f: F) -> Result<R, Error>
-    where F: FnOnce(&DIE) -> R {
-        let entry = match self.entry(loc.offset) {
+impl DwarfContext for GimliCU<'_> {
+    fn entry_context<F,R>(&self, unit_pos: &DwarfUnit, f: F) -> Result<R, Error>
+    where F: FnOnce(&GimliDIE) -> R {
+        let entry = match self.entry(unit_pos.entry_offset) {
             Ok(entry) => entry,
             Err(_) => {
                 return Err(
                     Error::DIEError(
-                        format!("Failed to find DIE at location: {loc:?}")
+                        format!("Failed to find DIE at location: {unit_pos:?}")
                     )
                 );
             }
@@ -357,9 +376,17 @@ impl DwarfContext for CU<'_> {
         Ok(f(&entry))
     }
 
-    fn unit_context<F,R>(&self, _loc: &Location, f: F) -> Result<R, Error>
-    where F: FnOnce(&CU) -> R {
+    fn unit_context<F,R>(&self, _unit_pos: &DwarfUnit, f: F) -> Result<R, Error>
+    where F: FnOnce(&GimliCU) -> R {
         Ok(f(self))
     }
 }
 
+/// Wrapper around a DWARF Unit
+#[derive(Copy, Clone, Debug, PartialEq, Eq)]
+pub struct DwarfUnit {
+    /// offset of DIE containing the Unit
+    pub(crate) die_offset: gimli::DebugInfoOffset,
+    /// offset of Unit entry in the DIE
+    pub(crate) entry_offset: gimli::UnitOffset,
+}

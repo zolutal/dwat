@@ -1,112 +1,147 @@
 //! Interfaces representing DWARF type information
 
-use gimli::{RunTimeEndian, DebugStrOffset};
-use gimli::AttributeValue;
+use gimli::{DebugStrOffset, DebugLineStrOffset, AttributeValue};
 
+use crate::dwarf::{DwarfContext, GimliDIE, GimliCU, DwarfUnit};
 use crate::dwarf::borrowable_dwarf::BorrowableDwarf;
 use crate::types::unit_has_members::UnitHasMembers;
 use crate::types::unit_inner_type::UnitInnerType;
 use crate::types::unit_name_type::UnitNamedType;
 use crate::format::format_member;
-use crate::dwarf::DwarfContext;
 use crate::Error;
-
-// Abbreviations for some lengthy gimli types
-pub(crate) type R<'a> = gimli::EndianSlice<'a, RunTimeEndian>;
-pub(crate) type DIE<'a> = gimli::DebuggingInformationEntry<'a,'a,R<'a>,usize>;
-pub(crate) type CU<'a> = gimli::Unit<R<'a>, usize>;
-pub(crate) type GimliDwarf<'a> = gimli::Dwarf<R<'a>>;
-
-/// Represents a location of some type/tag in the DWARF information
-#[derive(Copy, Clone, Debug, PartialEq, Eq)]
-pub struct Location {
-    pub header: gimli::DebugInfoOffset,
-    pub offset: gimli::UnitOffset,
-}
 
 /// Represents a struct type
 #[derive(Clone, Copy, Debug)]
 pub struct Struct {
-    pub location: Location,
+    pub location: DwarfUnit,
 }
 
 /// Represents an array type
 #[derive(Clone, Copy, Debug)]
 pub struct Array {
-    pub location: Location,
+    pub location: DwarfUnit,
 }
 
 /// Represents an enum type
 #[derive(Clone, Copy, Debug)]
 pub struct Enum {
-    pub location: Location,
+    pub location: DwarfUnit,
 }
 
 /// Represents a pointer to a type
 #[derive(Clone, Copy, Debug)]
 pub struct Pointer {
-    pub location: Location,
+    pub location: DwarfUnit,
 }
 
 /// Represents a type that is a function pointer prototype
 #[derive(Clone, Copy, Debug)]
 pub struct Subroutine {
-    pub location: Location,
+    pub location: DwarfUnit,
 }
 
 /// Represents a typedef renaming of a type
 #[derive(Clone, Copy, Debug)]
 pub struct Typedef {
-    pub location: Location,
+    pub location: DwarfUnit,
 }
 
 /// Represents a union type
 #[derive(Clone, Copy, Debug)]
 pub struct Union {
-    pub location: Location,
+    pub location: DwarfUnit,
 }
 
 /// Represents a base type, e.g. int, long, etc...
 #[derive(Clone, Copy, Debug)]
 pub struct Base {
-    pub location: Location,
+    pub location: DwarfUnit,
 }
 
 /// Represents the C const type-modifier
 #[derive(Clone, Copy, Debug)]
 pub struct Const {
-    pub location: Location,
+    pub location: DwarfUnit,
 }
 
 /// Represents the C volatile type-modifier
 #[derive(Clone, Copy, Debug)]
 pub struct Volatile {
-    pub location: Location,
+    pub location: DwarfUnit,
 }
 
 /// Represents the C restrict type-modifier
 #[derive(Clone, Copy, Debug)]
 pub struct Restrict {
-    pub location: Location,
+    pub location: DwarfUnit,
 }
 
 /// Represents the arguments list of a Subprocedure
 #[derive(Clone, Copy, Debug)]
 pub struct FormalParameter {
-    pub location: Location,
+    pub location: DwarfUnit,
 }
 
 /// Represents a variable declaration
 #[derive(Clone, Copy, Debug)]
 pub struct Variable {
-    pub location: Location,
+    pub location: DwarfUnit,
 }
 
 /// Represents a field of a struct or union
 #[derive(Clone, Copy, Debug)]
 pub struct Member {
-    pub location: Location,
+    pub location: DwarfUnit,
 }
+
+/// Represents a DWARF compile unit
+#[derive(Clone, Copy, Debug)]
+pub struct CompileUnit {
+    pub location: DwarfUnit,
+}
+
+/// Represents a subprogram/function
+#[derive(Clone, Copy, Debug)]
+pub struct Subprogram {
+    pub location: DwarfUnit,
+}
+
+
+/// This trait specifies that a type is associated with some DWARF tag
+pub trait Tagged {
+    fn new(location: DwarfUnit) -> Self;
+    fn tag() -> gimli::DwTag;
+}
+
+macro_rules! impl_tagged {
+    ($type:ty, $tag:expr) => {
+        impl Tagged for $type {
+            fn new(location: DwarfUnit) -> Self {
+                Self { location }
+            }
+
+            fn tag() -> gimli::DwTag {
+                $tag
+            }
+        }
+    };
+}
+
+impl_tagged!(Struct, gimli::DW_TAG_structure_type);
+impl_tagged!(Array, gimli::DW_TAG_array_type);
+impl_tagged!(Enum, gimli::DW_TAG_enumeration_type);
+impl_tagged!(Pointer, gimli::DW_TAG_pointer_type);
+impl_tagged!(Subroutine, gimli::DW_TAG_subroutine_type);
+impl_tagged!(Typedef, gimli::DW_TAG_typedef);
+impl_tagged!(Union, gimli::DW_TAG_union_type);
+impl_tagged!(Base, gimli::DW_TAG_base_type);
+impl_tagged!(Const, gimli::DW_TAG_const_type);
+impl_tagged!(Volatile, gimli::DW_TAG_volatile_type);
+impl_tagged!(Restrict, gimli::DW_TAG_restrict_type);
+impl_tagged!(Variable, gimli::DW_TAG_variable);
+impl_tagged!(CompileUnit, gimli::DW_TAG_compile_unit);
+impl_tagged!(Subprogram, gimli::DW_TAG_subprogram);
+
 
 /// Enum of supported types which may be returned by get_type()
 #[derive(Clone, Copy, Debug)]
@@ -125,7 +160,7 @@ pub enum Type {
 }
 
 impl Type {
-    fn u_byte_size(&self, unit: &CU) -> Result<usize, Error> {
+    fn u_byte_size(&self, unit: &GimliCU) -> Result<usize, Error> {
         match self {
             Type::Struct(struc) => {
                 struc.u_byte_size(unit)
@@ -218,8 +253,21 @@ where D: DwarfContext + BorrowableDwarf {
     })
 }
 
+// Try to retrieve a string from the debug_str section for a given offset
+pub(crate) fn from_dbg_line_str_ref<D>(dwarf: &D, str_ref: DebugLineStrOffset<usize>)
+-> Option<String>
+where D: DwarfContext + BorrowableDwarf {
+    dwarf.borrow_dwarf(|dwarf| {
+        if let Ok(str_ref) = dwarf.debug_line_str.get_str(str_ref) {
+            let str_ref = str_ref.to_string_lossy();
+            return Some(str_ref.to_string());
+        }
+        None
+    })
+}
+
 // Try to retrieve the name attribute as a string for a DIE if one exists
-pub(crate) fn get_entry_name<D>(dwarf: &D, entry: &DIE) -> Result<String, Error>
+pub(crate) fn get_entry_name<D>(dwarf: &D, entry: &GimliDIE) -> Result<String, Error>
 where D: DwarfContext + BorrowableDwarf {
     if let Ok(attr_val) = entry.attr_value(gimli::DW_AT_name) {
         match attr_val {
@@ -233,10 +281,15 @@ where D: DwarfContext + BorrowableDwarf {
                     return Ok(str)
                 }
             },
+            Some(AttributeValue::DebugLineStrRef(strref)) => {
+                if let Some(str) = from_dbg_line_str_ref(dwarf, strref) {
+                    return Ok(str)
+                }
+            },
             None => {
                 return Err(Error::NameAttributeNotFound)
             },
-            _ => {}
+            _ => { }
         }
     }
     Err(Error::InvalidAttributeError)
@@ -249,9 +302,9 @@ pub(crate) mod unit_name_type {
 
     /// Public crate trait backing NamedType
     pub trait UnitNamedType {
-        fn location(&self) -> Location;
+        fn location(&self) -> DwarfUnit;
 
-        fn u_name<D>(&self, dwarf: &D, unit: &CU) -> Result<String, Error>
+        fn u_name<D>(&self, dwarf: &D, unit: &GimliCU) -> Result<String, Error>
         where D: DwarfContext + BorrowableDwarf {
             unit.entry_context(&self.location(), |entry| {
                 get_entry_name(dwarf, entry)
@@ -272,7 +325,7 @@ pub trait NamedType : unit_name_type::UnitNamedType {
 macro_rules! impl_named_type {
     ($type:ty) => {
         impl unit_name_type::UnitNamedType for $type {
-            fn location(&self) -> Location {
+            fn location(&self) -> DwarfUnit {
                 self.location
             }
         }
@@ -292,40 +345,8 @@ impl_named_type!(Volatile);
 impl_named_type!(Restrict);
 impl_named_type!(Variable);
 impl_named_type!(Member);
-
-
-/// This trait specifies that a type is associated with some DWARF tag
-pub trait Tagged {
-    fn new(location: Location) -> Self;
-    fn tag() -> gimli::DwTag;
-}
-
-macro_rules! impl_tagged_type {
-    ($type:ty, $tag:expr) => {
-        impl Tagged for $type {
-            fn new(location: Location) -> Self {
-                Self { location }
-            }
-
-            fn tag() -> gimli::DwTag {
-                $tag
-            }
-        }
-    };
-}
-
-impl_tagged_type!(Struct, gimli::DW_TAG_structure_type);
-impl_tagged_type!(Array, gimli::DW_TAG_array_type);
-impl_tagged_type!(Enum, gimli::DW_TAG_enumeration_type);
-impl_tagged_type!(Pointer, gimli::DW_TAG_pointer_type);
-impl_tagged_type!(Subroutine, gimli::DW_TAG_subroutine_type);
-impl_tagged_type!(Typedef, gimli::DW_TAG_typedef);
-impl_tagged_type!(Union, gimli::DW_TAG_union_type);
-impl_tagged_type!(Base, gimli::DW_TAG_base_type);
-impl_tagged_type!(Const, gimli::DW_TAG_const_type);
-impl_tagged_type!(Volatile, gimli::DW_TAG_volatile_type);
-impl_tagged_type!(Restrict, gimli::DW_TAG_restrict_type);
-impl_tagged_type!(Variable, gimli::DW_TAG_variable);
+impl_named_type!(CompileUnit);
+impl_named_type!(Subprogram);
 
 
 /// force UnitInnerType trait to be private
@@ -334,16 +355,16 @@ pub(crate) mod unit_inner_type {
     use crate::Error;
 
     pub trait UnitInnerType {
-        fn location(&self) -> Location;
+        fn location(&self) -> DwarfUnit;
 
         // DW_AT_type : reference
-        fn u_get_type(&self, unit: &CU) -> Result<Type, Error> {
+        fn u_get_type(&self, unit: &GimliCU) -> Result<Type, Error> {
             unit.entry_context(&self.location(), |entry| {
                 if let Ok(attr_val) = entry.attr_value(gimli::DW_AT_type) {
-                    if let Some(AttributeValue::UnitRef(offset)) = attr_val {
-                        let type_loc = Location {
-                            header: self.location().header,
-                            offset,
+                    if let Some(AttributeValue::UnitRef(entry_offset)) = attr_val {
+                        let type_loc = DwarfUnit {
+                            die_offset: self.location().die_offset,
+                            entry_offset,
                         };
                         return unit.entry_context(&type_loc, |entry| {
                             entry_to_type(type_loc, entry)
@@ -372,7 +393,7 @@ pub trait InnerType : unit_inner_type::UnitInnerType {
 macro_rules! impl_inner_type {
     ($type:ty) => {
         impl unit_inner_type::UnitInnerType for $type {
-            fn location(&self) -> Location {
+            fn location(&self) -> DwarfUnit {
                 self.location
             }
         }
@@ -394,7 +415,7 @@ impl_inner_type!(Member);
 
 
 // DW_AT_byte_size : constant,exprloc,reference
-fn get_entry_byte_size(entry: &DIE) -> Result<usize, Error> {
+fn get_entry_byte_size(entry: &GimliDIE) -> Result<usize, Error> {
     if let Ok(opt_attr) = entry.attr(gimli::DW_AT_byte_size) {
         if let Some(attr) = opt_attr {
             if let Some(attr_val) = attr.udata_value() {
@@ -419,7 +440,7 @@ fn get_entry_byte_size(entry: &DIE) -> Result<usize, Error> {
 // Try to retrieve the alignment attribute if one exists, alignment was added
 // in DWARF 5 but gcc will inlcude it even for -gdwarf-4
 // DW_AT_alignment : constant
-fn get_entry_alignment(entry: &DIE) -> Result<usize, Error> {
+fn get_entry_alignment(entry: &GimliDIE) -> Result<usize, Error> {
     if let Ok(opt_attr) = entry.attr(gimli::DW_AT_alignment) {
         if let Some(attr) = opt_attr {
             if let Some(alignment) = attr.udata_value() {
@@ -432,17 +453,202 @@ fn get_entry_alignment(entry: &DIE) -> Result<usize, Error> {
     Err(Error::InvalidAttributeError)
 }
 
+#[derive(Debug)]
+#[allow(non_camel_case_types)]
+pub enum Language {
+    /// ISO C:1989
+    C89,
+    /// Non-standardized C, such as K&R
+    C,
+    /// ISO Ada:1983
+    Ada83,
+    // ISO C++98
+    C_plus_plus,
+    /// ISO COBOL:1974
+    Cobol74,
+    /// ISO COBOL:1985
+    Cobol85,
+    /// ISO FORTRAN:1977
+    Fortran77,
+    /// ISO Fortran:1990
+    Fortran90,
+    /// ISO Pascal:1983
+    Pascal83,
+    /// ISO Modula-2:1996
+    Modula2,
+    /// Java
+    Java,
+    /// ISO C:1999
+    C99,
+    /// ISO Ada:1995
+    Ada95,
+    /// ISO Fortran:1995
+    Fortran95,
+    /// ANSI PL/I:1976
+    PLI,
+    /// Objective C
+    ObjC,
+    /// Objective C++
+    ObjC_plus_plus,
+    /// UPC (Unified Parallel C)
+    UPC,
+    /// D
+    D,
+    /// Python
+    Python,
+    /// OpenCL
+    OpenCL,
+    /// Go
+    Go,
+    /// Modula-3
+    Modula3,
+    /// Haskell
+    Haskell,
+    /// ISO C++03
+    C_plus_plus_03,
+    /// ISO C++11
+    C_plus_plus_11,
+    /// OCaml
+    OCaml,
+    /// Rust
+    Rust,
+    /// ISO C:2011
+    C11,
+    /// Swift
+    Swift,
+    /// Julia
+    Julia,
+    /// Dylan
+    Dylan,
+    /// ISO C++14
+    C_plus_plus_14,
+    /// ISO Fortran:2004
+    Fortran03,
+    /// ISO Fortran:2010
+    Fortran08,
+    /// RenderScript Kernel Language
+    RenderScript,
+    /// BLISS
+    BLISS,
+    /// Vendor Extension
+    Vendor(u16)
+}
+
+impl TryFrom<u16> for Language {
+    type Error = ();
+
+    fn try_from(v: u16) -> Result<Self, Self::Error> {
+        match v {
+            1 => Ok(Language::C89),
+            2 => Ok(Language::C),
+            3 => Ok(Language::Ada83),
+            4 => Ok(Language::C_plus_plus),
+            5 => Ok(Language::Cobol74),
+            6 => Ok(Language::Cobol85),
+            7 => Ok(Language::Fortran77),
+            8 => Ok(Language::Fortran90),
+            9 => Ok(Language::Pascal83),
+            10 => Ok(Language::Modula2),
+            11 => Ok(Language::Java),
+            12 => Ok(Language::C99),
+            13 => Ok(Language::Ada95),
+            14 => Ok(Language::Fortran95),
+            15 => Ok(Language::PLI),
+            16 => Ok(Language::ObjC),
+            17 => Ok(Language::ObjC_plus_plus),
+            18 => Ok(Language::UPC),
+            19 => Ok(Language::D),
+            20 => Ok(Language::Python),
+            21 => Ok(Language::OpenCL),
+            22 => Ok(Language::Go),
+            23 => Ok(Language::Modula3),
+            24 => Ok(Language::Haskell),
+            25 => Ok(Language::C_plus_plus_03),
+            26 => Ok(Language::C_plus_plus_11),
+            27 => Ok(Language::OCaml),
+            28 => Ok(Language::Rust),
+            29 => Ok(Language::C11),
+            30 => Ok(Language::Swift),
+            31 => Ok(Language::Julia),
+            32 => Ok(Language::Dylan),
+            33 => Ok(Language::C_plus_plus_14),
+            34 => Ok(Language::Fortran03),
+            35 => Ok(Language::Fortran08),
+            36 => Ok(Language::RenderScript),
+            37 => Ok(Language::BLISS),
+            _ => Err(()),
+        }
+    }
+}
+
+impl CompileUnit {
+    pub fn producer<D: DwarfContext + BorrowableDwarf>(&self, dwarf: &D)
+    -> Result<String, Error> {
+        dwarf.entry_context(&self.location, |entry| {
+            if let Ok(attr_val) = entry.attr_value(gimli::DW_AT_producer) {
+                match attr_val {
+                    Some(AttributeValue::String(str)) => {
+                        if let Ok(str) = str.to_string() {
+                            return Ok(str.to_string())
+                        }
+                    },
+                    Some(AttributeValue::DebugStrRef(strref)) => {
+                        if let Some(str) = from_dbg_str_ref(dwarf, strref) {
+                            return Ok(str)
+                        }
+                    },
+                    Some(AttributeValue::DebugLineStrRef(strref)) => {
+                        if let Some(str) = from_dbg_line_str_ref(dwarf, strref) {
+                            return Ok(str)
+                        }
+                    },
+                    None => {
+                        return Err(Error::ProducerAttributeNotFound)
+                    },
+                    _ => { }
+                }
+            }
+            Err(Error::InvalidAttributeError)
+        })?
+    }
+
+    pub fn language<D: DwarfContext + BorrowableDwarf>(&self, dwarf: &D)
+    -> Result<Language, Error> {
+        dwarf.entry_context(&self.location, |entry| {
+            if let Ok(attr_val) = entry.attr_value(gimli::DW_AT_language) {
+                match attr_val {
+                    Some(AttributeValue::Language(lang)) => {
+                        if lang.0 >= 0x8000 {
+                            return Ok(Language::Vendor(lang.0));
+                        } else {
+                            let lang = match lang.0.try_into() {
+                                Ok(lang) => lang,
+                                Err(_) => return Err(Error::InvalidAttributeError)
+                            };
+                            return Ok(lang)
+                        }
+                    },
+                    None => {
+                        return Err(Error::LanguageAttributeNotFound)
+                    },
+                    _ => { }
+                }
+            }
+            Err(Error::InvalidAttributeError)
+        })?
+    }
+}
 
 impl Subroutine {
-    fn location(&self) -> Location {
+    fn location(&self) -> DwarfUnit {
         self.location
     }
 
-    pub(crate) fn u_get_params(&self, unit: &CU)
+    pub(crate) fn u_get_params(&self, unit: &GimliCU)
     -> Result<Vec<FormalParameter>, Error> {
         let mut params: Vec<FormalParameter> = vec![];
         let mut entries = {
-            match unit.entries_at_offset(self.location.offset) {
+            match unit.entries_at_offset(self.location.entry_offset) {
                 Ok(entries) => entries,
                 _ => return Err(Error::DIEError(
                    format!("Failed to seek to DIE at {:?}", self.location())
@@ -458,9 +664,9 @@ impl Subroutine {
             if entry.tag() != gimli::DW_TAG_formal_parameter {
                 break;
             }
-            let location = Location {
-                header: self.location.header,
-                offset: entry.offset(),
+            let location = DwarfUnit {
+                die_offset: self.location.die_offset,
+                entry_offset: entry.offset(),
             };
             params.push(FormalParameter { location });
         };
@@ -475,7 +681,7 @@ impl Subroutine {
     }
 }
 
-fn entry_to_type(location: Location, entry: &DIE) -> Result<Type, Error> {
+fn entry_to_type(location: DwarfUnit, entry: &GimliDIE) -> Result<Type, Error> {
     let tag = match entry.tag() {
         gimli::DW_TAG_array_type => {
             Type::Array(Array{location})
@@ -521,7 +727,7 @@ fn entry_to_type(location: Location, entry: &DIE) -> Result<Type, Error> {
 
 impl Member {
     // DW_AT_data_member_location : constant,exprloc,loclist
-    pub(crate) fn u_bit_size(&self, unit: &CU) -> Result<usize, Error> {
+    pub(crate) fn u_bit_size(&self, unit: &GimliCU) -> Result<usize, Error> {
         unit.entry_context(&self.location, |entry| {
             if let Ok(opt_attr) = entry.attr(gimli::DW_AT_bit_size) {
                 if let Some(attr) = opt_attr {
@@ -553,7 +759,7 @@ impl Member {
         })?
     }
 
-    pub(crate) fn u_byte_size(&self, unit: &CU) -> Result<usize, Error> {
+    pub(crate) fn u_byte_size(&self, unit: &GimliCU) -> Result<usize, Error> {
         let inner = self.u_get_type(unit)?;
         inner.u_byte_size(unit)
     }
@@ -566,7 +772,7 @@ impl Member {
     }
 
     // DW_AT_data_member_location : constant,exprloc,loclist
-    pub(crate) fn u_member_location(&self, unit: &CU) -> Result<usize, Error> {
+    pub(crate) fn u_member_location(&self, unit: &GimliCU) -> Result<usize, Error> {
         unit.entry_context(&self.location, |entry| {
             if let Ok(opt_attr) = entry.attr(gimli::DW_AT_data_member_location) {
                 if let Some(attr) = opt_attr {
@@ -598,7 +804,7 @@ impl Member {
         })?
     }
 
-    pub(crate) fn u_offset(&self, unit: &CU) -> Result<usize, Error> {
+    pub(crate) fn u_offset(&self, unit: &GimliCU) -> Result<usize, Error> {
         self.u_member_location(unit)
     }
 
@@ -615,12 +821,12 @@ pub(crate) mod unit_has_members {
     use crate::Error;
 
     pub trait UnitHasMembers {
-        fn location(&self) -> Location;
+        fn location(&self) -> DwarfUnit;
 
-        fn u_members(&self, unit: &CU) -> Result<Vec<Member>, Error> {
+        fn u_members(&self, unit: &GimliCU) -> Result<Vec<Member>, Error> {
             let mut members: Vec<Member> = Vec::new();
             let mut entries = {
-                match unit.entries_at_offset(self.location().offset) {
+                match unit.entries_at_offset(self.location().entry_offset) {
                     Ok(entries) => entries,
                     _ => return Err(Error::DIEError(
                        format!("Failed to seek to DIE at {:?}", self.location())
@@ -636,9 +842,9 @@ pub(crate) mod unit_has_members {
                 if entry.tag() != gimli::DW_TAG_member {
                     break;
                 }
-                let location = Location {
-                    header: self.location().header,
-                    offset: entry.offset(),
+                let location = DwarfUnit {
+                    die_offset: self.location().die_offset,
+                    entry_offset: entry.offset(),
                 };
                 members.push(Member { location });
             };
@@ -658,10 +864,10 @@ pub trait HasMembers : unit_has_members::UnitHasMembers {
 }
 
 impl unit_has_members::UnitHasMembers for Struct {
-    fn location(&self) -> Location { self.location }
+    fn location(&self) -> DwarfUnit { self.location }
 }
 impl unit_has_members::UnitHasMembers for Union {
-    fn location(&self) -> Location { self.location }
+    fn location(&self) -> DwarfUnit { self.location }
 }
 
 impl HasMembers for Struct { }
@@ -694,7 +900,7 @@ pub struct AlignmentStats {
 }
 
 impl Struct {
-    fn location(&self) -> Location {
+    fn location(&self) -> DwarfUnit {
         self.location
     }
 
@@ -811,7 +1017,7 @@ impl Struct {
         self.to_string_verbose(dwarf, 0)
     }
 
-    pub(crate) fn u_byte_size(&self, unit: &CU) -> Result<usize, Error> {
+    pub(crate) fn u_byte_size(&self, unit: &GimliCU) -> Result<usize, Error> {
         unit.entry_context(&self.location(), |entry| {
             get_entry_byte_size(entry)
         })?
@@ -824,7 +1030,7 @@ impl Struct {
         })?
     }
 
-    pub(crate) fn u_alignment(&self, unit: &CU) -> Result<usize, Error> {
+    pub(crate) fn u_alignment(&self, unit: &GimliCU) -> Result<usize, Error> {
         unit.entry_context(&self.location(), |entry| {
             get_entry_alignment(entry)
         })?
@@ -839,7 +1045,7 @@ impl Struct {
 }
 
 impl Union {
-    fn location(&self) -> Location {
+    fn location(&self) -> DwarfUnit {
         self.location
     }
 
@@ -871,7 +1077,7 @@ impl Union {
         self.to_string_verbose(dwarf, 0)
     }
 
-    pub(crate) fn u_byte_size(&self, unit: &CU) -> Result<usize, Error> {
+    pub(crate) fn u_byte_size(&self, unit: &GimliCU) -> Result<usize, Error> {
         let entry_size = unit.entry_context(&self.location(), |entry| {
             get_entry_byte_size(entry)
         })?;
@@ -904,12 +1110,12 @@ impl Union {
 }
 
 impl Enum {
-    fn location(&self) -> Location {
+    fn location(&self) -> DwarfUnit {
         self.location
     }
 
     /// internal byte_size on CU
-    pub(crate) fn u_byte_size(&self, unit: &CU) -> Result<usize, Error> {
+    pub(crate) fn u_byte_size(&self, unit: &GimliCU) -> Result<usize, Error> {
         let entry_size = unit.entry_context(&self.location(), |entry| {
             get_entry_byte_size(entry)
         })?;
@@ -939,7 +1145,7 @@ impl Pointer {
     }
 
     /// internal byte_size on CU
-    pub(crate) fn u_byte_size(&self, unit: &CU) -> Result<usize, Error> {
+    pub(crate) fn u_byte_size(&self, unit: &GimliCU) -> Result<usize, Error> {
         let size = unit.header.encoding().address_size as usize;
         Ok(size)
     }
@@ -954,7 +1160,7 @@ impl Pointer {
 }
 
 impl Base {
-    pub(crate) fn u_byte_size(&self, unit: &CU) -> Result<usize, Error> {
+    pub(crate) fn u_byte_size(&self, unit: &GimliCU) -> Result<usize, Error> {
         unit.entry_context(&self.location(), |entry| {
             get_entry_byte_size(entry)
         })?
@@ -971,11 +1177,11 @@ impl Base {
 }
 
 impl Typedef {
-    fn location(&self) -> Location {
+    fn location(&self) -> DwarfUnit {
         self.location
     }
 
-    pub(crate) fn u_byte_size(&self, unit: &CU) -> Result<usize, Error> {
+    pub(crate) fn u_byte_size(&self, unit: &GimliCU) -> Result<usize, Error> {
         let inner_type = self.u_get_type(unit)?;
         inner_type.u_byte_size(unit)
     }
@@ -989,11 +1195,11 @@ impl Typedef {
 }
 
 impl Const {
-    fn location(&self) -> Location {
+    fn location(&self) -> DwarfUnit {
         self.location
     }
 
-    pub(crate) fn u_byte_size(&self, unit: &CU) -> Result<usize, Error> {
+    pub(crate) fn u_byte_size(&self, unit: &GimliCU) -> Result<usize, Error> {
         let entry_size = unit.entry_context(&self.location(), |entry| {
             get_entry_byte_size(entry)
         })?;
@@ -1015,11 +1221,11 @@ impl Const {
 }
 
 impl Volatile {
-    fn location(&self) -> Location {
+    fn location(&self) -> DwarfUnit {
         self.location
     }
 
-    pub(crate) fn u_byte_size(&self, unit: &CU) -> Result<usize, Error> {
+    pub(crate) fn u_byte_size(&self, unit: &GimliCU) -> Result<usize, Error> {
         let inner_type = self.u_get_type(unit)?;
         inner_type.u_byte_size(unit)
     }
@@ -1033,11 +1239,11 @@ impl Volatile {
 }
 
 impl Restrict {
-    fn location(&self) -> Location {
+    fn location(&self) -> DwarfUnit {
         self.location
     }
 
-    pub(crate) fn u_byte_size(&self, unit: &CU) -> Result<usize, Error> {
+    pub(crate) fn u_byte_size(&self, unit: &GimliCU) -> Result<usize, Error> {
         let inner_type = self.u_get_type(unit)?;
         inner_type.u_byte_size(unit)
     }
@@ -1051,14 +1257,14 @@ impl Restrict {
 }
 
 impl Array {
-    fn location(&self) -> Location {
+    fn location(&self) -> DwarfUnit {
         self.location
     }
 
-    pub(crate) fn u_get_bound(&self, unit: &CU) -> Result<usize, Error> {
+    pub(crate) fn u_get_bound(&self, unit: &GimliCU) -> Result<usize, Error> {
         let bound = 0;
         let mut entries = {
-            match unit.entries_at_offset(self.location.offset) {
+            match unit.entries_at_offset(self.location.entry_offset) {
                 Ok(entries) => entries,
                 _ => return Err(Error::DIEError(
                    format!("Failed to seek to DIE at {:?}", self.location())
@@ -1129,7 +1335,7 @@ impl Array {
         })?
     }
 
-    pub(crate) fn u_entry_size(&self, unit: &CU) -> Result<usize, Error> {
+    pub(crate) fn u_entry_size(&self, unit: &GimliCU) -> Result<usize, Error> {
         let inner_type = self.u_get_type(unit)?;
         inner_type.u_byte_size(unit)
     }
@@ -1142,7 +1348,7 @@ impl Array {
         })?
     }
 
-    pub(crate) fn u_byte_size(&self, unit: &CU) -> Result<usize, Error> {
+    pub(crate) fn u_byte_size(&self, unit: &GimliCU) -> Result<usize, Error> {
         let byte_size = unit.entry_context(&self.location(), |entry| {
             get_entry_byte_size(entry)
         })?;

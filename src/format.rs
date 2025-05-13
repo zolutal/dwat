@@ -3,10 +3,10 @@ use crate::dwarf::borrowable_dwarf::BorrowableDwarf;
 use crate::unit_has_members::UnitHasMembers;
 use crate::unit_inner_type::UnitInnerType;
 use crate::unit_name_type::UnitNamedType;
-use crate::{Member, Error, Type, CU};
-use crate::dwarf::DwarfContext;
+use crate::{Member, Error, Type};
+use crate::dwarf::{DwarfContext, GimliCU};
 
-pub fn format_type<D>(dwarf: &D, unit: &CU, member_name: String, typ: Type,
+pub fn format_type<D>(dwarf: &D, unit: &GimliCU, member_name: String, typ: Type,
                       level: usize, tablevel: usize, verbosity: u8,
                       base_offset: usize)
 -> Result<String, Error>
@@ -245,7 +245,7 @@ where D: DwarfContext + BorrowableDwarf {
     Ok(out)
 }
 
-pub fn format_member<D>(dwarf: &D, unit: &CU, member: Member, tablevel: usize,
+pub fn format_member<D>(dwarf: &D, unit: &GimliCU, member: Member, tablevel: usize,
                         verbosity: u8, base_offset: usize)
 -> Result<String, Error>
 where D: DwarfContext + BorrowableDwarf {

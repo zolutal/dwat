@@ -71,4 +71,10 @@ pub enum Error {
 
     #[error("failure when attempting to find an Alignment Attribute")]
     AlignmentAttributeNotFound,
+
+    #[error("failure when attempting to find a Producer Attribute")]
+    ProducerAttributeNotFound,
+
+    #[error("failure when attempting to find a Language Attribute")]
+    LanguageAttributeNotFound,
 }
