@@ -36,7 +36,7 @@ Options:
 
 # Examples
 
-There are several examples in the `examples` directory that are worth checking out.
+There are several examples in the `examples` directory using the rust API and python examples in `examples_python` that are worth checking out.
 
 # Usage
 
@@ -58,7 +58,7 @@ The dwarf object has a `lookup_type` method that can be used to lookup any type 
 Struct members can then be retrieved by calling `.members()` which returns a Vector of `Member` structs.
 
 ```rust
-    let members = struc.members(&dwarf)?;
+    let members = found.members(&dwarf)?;
 ```
 
 A struct object can be converted to a C-style definition String by invoking the `to_string` function:
