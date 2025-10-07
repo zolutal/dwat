@@ -12,14 +12,14 @@ def load_dwarf_path(
 class Dwarf:
     def lookup_type(self, named_type: NamedType, name: str) -> typing.Union[
         Struct | Array | Enum | Pointer | Subroutine | Typedef | Union | Base |
-        Const | Volatile | Restrict
+        Const | Volatile | Restrict | Variable
     ]: ...
 
     def get_named_types_dict(self, named_type: NamedType) -> typing.Dict[
         str,
         typing.Union[
             Struct | Array | Enum | Pointer | Subroutine | Typedef | Union |
-            Base | Const | Volatile | Restrict
+            Base | Const | Volatile | Restrict | Variable
         ]
     ]: ...
 
@@ -27,7 +27,7 @@ class Dwarf:
         typing.Tuple[
             str,
             Struct | Array | Enum | Pointer | Subroutine | Typedef | Union |
-            Base | Const | Volatile | Restrict
+            Base | Const | Volatile | Restrict | Variable
         ]
     ]: ...
 
@@ -126,3 +126,10 @@ class Parameter:
         Struct | Array | Enum | Pointer | Subroutine | Typedef | Union |
         Base | Const | Volatile | Restrict
     ]: ...
+
+class Variable:
+    def type(self) -> typing.Union[
+        Struct | Array | Enum | Pointer | Subroutine | Typedef | Union |
+        Base | Const | Volatile | Restrict
+    ]: ...
+    name: typing.Optional[str]

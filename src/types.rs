@@ -157,6 +157,7 @@ pub enum Type {
     Const(Const),
     Volatile(Volatile),
     Restrict(Restrict),
+    Variable(Variable),
 }
 
 impl Type {
@@ -190,6 +191,9 @@ impl Type {
                 vol.u_byte_size(unit)
             }
             Type::Restrict(vol) => {
+                vol.u_byte_size(unit)
+            }
+            Type::Variable(vol) => {
                 vol.u_byte_size(unit)
             }
             // --- Unsized ---
@@ -230,6 +234,9 @@ impl Type {
                 vol.byte_size(dwarf)
             }
             Type::Restrict(vol) => {
+                vol.byte_size(dwarf)
+            }
+            Type::Variable(vol) => {
                 vol.byte_size(dwarf)
             }
             // --- Unsized ---
@@ -1363,6 +1370,24 @@ impl Array {
     }
 
     /// The memory footprint of the entire array
+    pub fn byte_size<D>(&self, dwarf: &D) -> Result<usize, Error>
+    where D: DwarfContext {
+        dwarf.unit_context(&self.location(), |unit| {
+            self.u_byte_size(unit)
+        })?
+    }
+}
+
+impl Variable {
+    fn location(&self) -> DwarfUnit {
+        self.location
+    }
+
+    pub(crate) fn u_byte_size(&self, unit: &GimliCU) -> Result<usize, Error> {
+        let inner_type = self.u_get_type(unit)?;
+        inner_type.u_byte_size(unit)
+    }
+
     pub fn byte_size<D>(&self, dwarf: &D) -> Result<usize, Error>
     where D: DwarfContext {
         dwarf.unit_context(&self.location(), |unit| {

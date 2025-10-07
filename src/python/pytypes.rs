@@ -27,6 +27,7 @@ pub(super) enum NamedTypes {
     Typedef,
     Union,
     Base,
+    Variable,
 }
 
 #[pyclass]
@@ -107,6 +108,12 @@ pub(super) struct Parameter {
     pub(super) dwarf: Dwarf
 }
 
+#[pyclass]
+pub(super) struct Variable {
+    pub(super) inner: crate::Variable,
+    pub(super) dwarf: Dwarf
+}
+
 pub(crate) fn to_py_object(py: Python<'_>, typ: crate::Type, dwarf: &Dwarf)
 -> Option<PyObject> {
     match typ {
@@ -172,6 +179,12 @@ pub(crate) fn to_py_object(py: Python<'_>, typ: crate::Type, dwarf: &Dwarf)
         },
         crate::Type::Restrict(res) => {
             Some(Restrict {
+                    inner: res,
+                    dwarf: dwarf.clone()
+            }.into_py(py))
+        }
+        crate::Type::Variable(res) => {
+            Some(Variable {
                     inner: res,
                     dwarf: dwarf.clone()
             }.into_py(py))
@@ -555,6 +568,39 @@ impl Member {
             Ok(format!("<Member: {name}>"))
         } else {
             Ok("<Member>".to_string())
+        }
+    }
+}
+
+#[pymethods]
+impl Variable {
+    /// The name of the variable
+    #[getter]
+    pub fn name(&self) -> PyResult<Option<String>> {
+        attr_getter!(self, name, Error::NameAttributeNotFound)
+    }
+
+    /// The size of this type in bytes
+    #[getter]
+    pub fn byte_size(&self) -> PyResult<Option<usize>> {
+        attr_getter!(self, byte_size, Error::ByteSizeAttributeNotFound)
+    }
+
+    /// Retrieves the backing type of the member
+    pub fn r#type(&self, py: Python<'_>) -> PyResult<Option<PyObject>> {
+        let dwarf = &*self.dwarf.inner;
+        Ok(to_py_object(py, self.inner.get_type(dwarf)?, &self.dwarf))
+    }
+
+    pub fn __str__(&self) -> PyResult<Option<String>> {
+        self.name()
+    }
+
+    pub fn __repr__(&self) -> PyResult<String> {
+        if let Ok(Some(name)) = self.name() {
+            Ok(format!("<Variable: {name}>"))
+        } else {
+            Ok("<Variable>".to_string())
         }
     }
 }

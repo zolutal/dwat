@@ -241,12 +241,23 @@ where D: DwarfContext + BorrowableDwarf {
             out.push_str(&format!("{inner_fmt} restrict"));
             return Ok(out);
         }
+        Type::Variable(c) => {
+            let name = c.u_name(dwarf, unit)?;
+            out.push_str(&format!("{name}"));
+            return Ok(out);
+        }
     }
     Ok(out)
 }
 
-pub fn format_member<D>(dwarf: &D, unit: &GimliCU, member: Member, tablevel: usize,
-                        verbosity: u8, base_offset: usize)
+pub fn format_member<D>(
+    dwarf: &D,
+    unit: &GimliCU,
+    member: Member,
+    tablevel: usize,
+    verbosity: u8,
+    base_offset: usize
+)
 -> Result<String, Error>
 where D: DwarfContext + BorrowableDwarf {
     let mtype = member.u_get_type(unit)?;

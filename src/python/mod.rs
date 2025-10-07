@@ -91,6 +91,17 @@ impl Dwarf {
                 } else {
                     None
                 }
+            },
+            NamedTypes::Variable => {
+                let found = self.inner.lookup_type::<crate::Variable>(name)?;
+                if let Some(found) = found {
+                    Some(Variable {
+                        inner: found,
+                        dwarf: self.clone()
+                    }.into_py(py))
+                } else {
+                    None
+                }
             }
         };
         Ok(obj)
@@ -152,6 +163,16 @@ impl Dwarf {
                     }.into_py(py));
                 }
             }
+            NamedTypes::Variable => {
+                let inner = self.inner.clone();
+                let found = inner.get_named_types_map::<crate::Variable>()?;
+                for (k,v) in found.into_iter() {
+                    type_map.insert(k, Variable {
+                        inner: v,
+                        dwarf: self.clone()
+                    }.into_py(py));
+                }
+            }
         };
         Ok(type_map)
     }
@@ -201,6 +222,15 @@ impl Dwarf {
                 let found = self.inner.get_named_types::<crate::Base>()?;
                 for (k, v) in found {
                     types.push((k, Base {
+                        inner: v,
+                        dwarf: self.clone()
+                    }.into_py(py)))
+                }
+            },
+            NamedTypes::Variable => {
+                let found = self.inner.get_named_types::<crate::Variable>()?;
+                for (k, v) in found {
+                    types.push((k, Variable {
                         inner: v,
                         dwarf: self.clone()
                     }.into_py(py)))
@@ -268,6 +298,7 @@ fn dwat(_py: Python, m: &PyModule) -> PyResult<()> {
     m.add_class::<Const>()?;
     m.add_class::<Volatile>()?;
     m.add_class::<Restrict>()?;
+    m.add_class::<Variable>()?;
 
     Ok(())
 }
