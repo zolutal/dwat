@@ -26,10 +26,14 @@ jobs:
           args: --release --out dist --find-interpreter
           sccache: 'true'
           manylinux: auto
+      - name: set platform/target name for artifact
+        run: |
+          target=${{ matrix.target }}
+          echo "ARTIFACT_NAME=wheels-ubuntu-${target}" >> $GITHUB_ENV
       - name: Upload wheels
         uses: actions/upload-artifact@v4
         with:
-          name: wheels
+          name: wheels-${{ env.ARTIFACT_NAME }}
           path: dist
 
   windows:
@@ -49,10 +53,14 @@ jobs:
           target: ${{ matrix.target }}
           args: --release --out dist --find-interpreter
           sccache: 'true'
+      - name: set platform/target name for artifact
+        run: |
+          target=${{ matrix.target }}
+          echo "ARTIFACT_NAME=wheels-windows-${target}" >> $GITHUB_ENV
       - name: Upload wheels
         uses: actions/upload-artifact@v4
         with:
-          name: wheels
+          name: wheels-${{ env.ARTIFACT_NAME }}
           path: dist
 
   macos:
@@ -71,10 +79,14 @@ jobs:
           target: ${{ matrix.target }}
           args: --release --out dist --find-interpreter
           sccache: 'true'
+      - name: Set platform/target name for artifact
+        run: |
+          target=${{ matrix.target }}
+          echo "ARTIFACT_NAME=wheels-macos-${target}" >> $GITHUB_ENV
       - name: Upload wheels
         uses: actions/upload-artifact@v4
         with:
-          name: wheels
+          name: wheels-${{ env.ARTIFACT_NAME }}
           path: dist
 
   sdist:
@@ -89,7 +101,7 @@ jobs:
       - name: Upload sdist
         uses: actions/upload-artifact@v4
         with:
-          name: wheels
+          name: wheels-sdist
           path: dist
 
   release:
@@ -100,7 +112,8 @@ jobs:
     steps:
       - uses: actions/download-artifact@v4
         with:
-          name: wheels
+          pattern: wheels-*
+          merge-multiple: true
       - name: Publish to PyPI
         uses: PyO3/maturin-action@v1
         env:
