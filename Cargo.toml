@@ -8,7 +8,7 @@ homepage = "https://github.com/zolutal/dwat"
 repository = "https://github.com/zolutal/dwat"
 readme = "README.md"
 keywords = [ "elf", "debug", "dwarf"]
-categories = ["Debugging"]
+categories = ["development-tools::debugging"]
 
 [lib]
 name = "dwat"
