@@ -1,4 +1,5 @@
 use pyo3::prelude::*;
+use pyo3::IntoPyObjectExt;
 
 use crate::prelude::*;
 use crate::Error;
@@ -115,79 +116,79 @@ pub(super) struct Variable {
 }
 
 pub(crate) fn to_py_object(py: Python<'_>, typ: crate::Type, dwarf: &Dwarf)
--> Option<PyObject> {
+-> Option<Py<PyAny>> {
     match typ {
         crate::Type::Struct(struc) => {
             Some(Struct {
                     inner: struc,
                     dwarf: dwarf.clone()
-            }.into_py(py))
+            }.into_py_any(py).unwrap())
         },
         crate::Type::Array(arr) => {
             Some(Array {
                     inner: arr,
                     dwarf: dwarf.clone()
-            }.into_py(py))
+            }.into_py_any(py).unwrap())
         },
         crate::Type::Enum(enu) => {
             Some(Enum {
                     inner: enu,
                     dwarf: dwarf.clone()
-            }.into_py(py))
+            }.into_py_any(py).unwrap())
         },
         crate::Type::Pointer(ptr) => {
             Some(Pointer {
                     inner: ptr,
                     dwarf: dwarf.clone()
-            }.into_py(py))
+            }.into_py_any(py).unwrap())
         },
         crate::Type::Subroutine(sub) => {
             Some(Subroutine {
                     inner: sub,
                     dwarf: dwarf.clone()
-            }.into_py(py))
+            }.into_py_any(py).unwrap())
         },
         crate::Type::Typedef(typedef) => {
             Some(Typedef {
                     inner: typedef,
                     dwarf: dwarf.clone()
-            }.into_py(py))
+            }.into_py_any(py).unwrap())
         },
         crate::Type::Union(union) => {
             Some(Union {
                     inner: union,
                     dwarf: dwarf.clone()
-            }.into_py(py))
+            }.into_py_any(py).unwrap())
         },
         crate::Type::Base(base) => {
             Some(Base {
                     inner: base,
                     dwarf: dwarf.clone()
-            }.into_py(py))
+            }.into_py_any(py).unwrap())
         },
         crate::Type::Const(cons) => {
             Some(Const {
                     inner: cons,
                     dwarf: dwarf.clone()
-            }.into_py(py))
+            }.into_py_any(py).unwrap())
         },
         crate::Type::Volatile(vol) => {
             Some(Volatile {
                     inner: vol,
                     dwarf: dwarf.clone()
-            }.into_py(py))
+            }.into_py_any(py).unwrap())
         },
         crate::Type::Restrict(res) => {
             Some(Restrict {
                     inner: res,
                     dwarf: dwarf.clone()
-            }.into_py(py))
+            }.into_py_any(py).unwrap())
         }
         crate::Type::Variable(res) => {
             Some(Variable {
                     inner: res,
                     dwarf: dwarf.clone()
-            }.into_py(py))
+            }.into_py_any(py).unwrap())
         }
     }
 }
@@ -255,7 +256,7 @@ impl Array {
     }
 
     /// Retrieves the backing type of the array
-    pub fn r#type(&self, py: Python<'_>) -> PyResult<Option<PyObject>> {
+    pub fn r#type(&self, py: Python<'_>) -> PyResult<Option<Py<PyAny>>> {
         let dwarf = &*self.dwarf.inner;
         Ok(to_py_object(py, self.inner.get_type(dwarf)?, &self.dwarf))
     }
@@ -287,7 +288,7 @@ impl Enum {
     }
 
     /// Retrieves the backing type of the enum
-    pub fn r#type(&self, py: Python<'_>) -> PyResult<Option<PyObject>> {
+    pub fn r#type(&self, py: Python<'_>) -> PyResult<Option<Py<PyAny>>> {
         let dwarf = &*self.dwarf.inner;
         Ok(to_py_object(py, self.inner.get_type(dwarf)?, &self.dwarf))
     }
@@ -306,13 +307,13 @@ impl Pointer {
     }
 
     /// Retrieves the backing type of the pointer
-    pub fn r#type(&self, py: Python<'_>) -> PyResult<Option<PyObject>> {
+    pub fn r#type(&self, py: Python<'_>) -> PyResult<Option<Py<PyAny>>> {
         let dwarf = &*self.dwarf.inner;
         Ok(to_py_object(py, self.inner.get_type(dwarf)?, &self.dwarf))
     }
 
     /// Retrieves the backing type of the pointer
-    pub fn deref(&self, py: Python<'_>) -> PyResult<Option<PyObject>> {
+    pub fn deref(&self, py: Python<'_>) -> PyResult<Option<Py<PyAny>>> {
         let dwarf = &*self.dwarf.inner;
         Ok(to_py_object(py, self.inner.get_type(dwarf)?, &self.dwarf))
     }
@@ -325,7 +326,7 @@ impl Pointer {
 #[pymethods]
 impl Subroutine {
     /// Retrieves the return_type of the subroutine
-    pub fn return_type(&self, py: Python<'_>) -> PyResult<Option<PyObject>> {
+    pub fn return_type(&self, py: Python<'_>) -> PyResult<Option<Py<PyAny>>> {
         let dwarf = &*self.dwarf.inner;
         Ok(to_py_object(py, self.inner.get_type(dwarf)?, &self.dwarf))
     }
@@ -368,7 +369,7 @@ impl Typedef {
     }
 
     /// Retrieves the backing type of the typedef
-    pub fn r#type(&self, py: Python<'_>) -> PyResult<Option<PyObject>> {
+    pub fn r#type(&self, py: Python<'_>) -> PyResult<Option<Py<PyAny>>> {
         let dwarf = &*self.dwarf.inner;
         Ok(to_py_object(py, self.inner.get_type(dwarf)?, &self.dwarf))
     }
@@ -466,7 +467,7 @@ impl Const {
     }
 
     /// Retrieves the backing type of the const modifier
-    pub fn r#type(&self, py: Python<'_>) -> PyResult<Option<PyObject>> {
+    pub fn r#type(&self, py: Python<'_>) -> PyResult<Option<Py<PyAny>>> {
         let dwarf = &*self.dwarf.inner;
         Ok(to_py_object(py, self.inner.get_type(dwarf)?, &self.dwarf))
     }
@@ -485,7 +486,7 @@ impl Volatile {
     }
 
     /// Retrieves the backing type of the volatile modifier
-    pub fn r#type(&self, py: Python<'_>) -> PyResult<Option<PyObject>> {
+    pub fn r#type(&self, py: Python<'_>) -> PyResult<Option<Py<PyAny>>> {
         let dwarf = &*self.dwarf.inner;
         Ok(to_py_object(py, self.inner.get_type(dwarf)?, &self.dwarf))
     }
@@ -504,7 +505,7 @@ impl Restrict {
     }
 
     /// Retrieves the backing type of the restrict modifier
-    pub fn r#type(&self, py: Python<'_>) -> PyResult<Option<PyObject>> {
+    pub fn r#type(&self, py: Python<'_>) -> PyResult<Option<Py<PyAny>>> {
         let dwarf = &*self.dwarf.inner;
         Ok(to_py_object(py, self.inner.get_type(dwarf)?, &self.dwarf))
     }
@@ -517,7 +518,7 @@ impl Restrict {
 #[pymethods]
 impl Parameter {
     /// Retrieves the backing type of the parameter
-    pub fn r#type(&self, py: Python<'_>) -> PyResult<Option<PyObject>> {
+    pub fn r#type(&self, py: Python<'_>) -> PyResult<Option<Py<PyAny>>> {
         let dwarf = &*self.dwarf.inner;
         Ok(to_py_object(py, self.inner.get_type(dwarf)?, &self.dwarf))
     }
@@ -554,7 +555,7 @@ impl Member {
     }
 
     /// Retrieves the backing type of the member
-    pub fn r#type(&self, py: Python<'_>) -> PyResult<Option<PyObject>> {
+    pub fn r#type(&self, py: Python<'_>) -> PyResult<Option<Py<PyAny>>> {
         let dwarf = &*self.dwarf.inner;
         Ok(to_py_object(py, self.inner.get_type(dwarf)?, &self.dwarf))
     }
@@ -587,7 +588,7 @@ impl Variable {
     }
 
     /// Retrieves the backing type of the member
-    pub fn r#type(&self, py: Python<'_>) -> PyResult<Option<PyObject>> {
+    pub fn r#type(&self, py: Python<'_>) -> PyResult<Option<Py<PyAny>>> {
         let dwarf = &*self.dwarf.inner;
         Ok(to_py_object(py, self.inner.get_type(dwarf)?, &self.dwarf))
     }

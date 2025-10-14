@@ -1,18 +1,11 @@
 use crate::dwarf::DwarfLookups;
 
 use pyo3::exceptions::PyValueError;
-use pyo3::wrap_pyfunction;
+use pyo3::IntoPyObjectExt;
 use pyo3::prelude::*;
 
-#[cfg(target_family = "unix")]
-use std::os::unix::io::FromRawFd;
-use libc::dup;
-
 use std::collections::HashMap;
-use std::path::PathBuf;
 use std::sync::Arc;
-use std::fs::File;
-use memmap2::Mmap;
 
 mod pytypes;
 use pytypes::NamedTypes;
@@ -35,7 +28,7 @@ struct Dwarf {
 impl Dwarf {
     /// Lookup a type corresponding to some NamedType and `name`.
     pub fn lookup_type(&mut self, py: Python<'_>, named_type: &NamedTypes,
-                       name: String) -> PyResult<Option<PyObject>> {
+                       name: String) -> PyResult<Option<Py<PyAny>>> {
         let obj = match named_type {
             NamedTypes::Struct => {
                 let found = self.inner.lookup_type::<crate::Struct>(name)?;
@@ -43,7 +36,7 @@ impl Dwarf {
                     Some(Struct {
                             inner: found,
                             dwarf: self.clone()
-                    }.into_py(py))
+                    }.into_py_any(py).unwrap())
                 } else {
                     None
                 }
@@ -54,7 +47,7 @@ impl Dwarf {
                     Some(Enum {
                         inner: found,
                         dwarf: self.clone()
-                    }.into_py(py))
+                    }.into_py_any(py).unwrap())
                 } else {
                     None
                 }
@@ -65,7 +58,7 @@ impl Dwarf {
                     Some(Typedef {
                         inner: found,
                         dwarf: self.clone()
-                    }.into_py(py))
+                    }.into_py_any(py).unwrap())
                 } else {
                     None
                 }
@@ -76,7 +69,7 @@ impl Dwarf {
                     Some(Union {
                         inner: found,
                         dwarf: self.clone()
-                    }.into_py(py))
+                    }.into_py_any(py).unwrap())
                 } else {
                     None
                 }
@@ -87,7 +80,7 @@ impl Dwarf {
                     Some(Base {
                         inner: found,
                         dwarf: self.clone()
-                    }.into_py(py))
+                    }.into_py_any(py).unwrap())
                 } else {
                     None
                 }
@@ -98,7 +91,7 @@ impl Dwarf {
                     Some(Variable {
                         inner: found,
                         dwarf: self.clone()
-                    }.into_py(py))
+                    }.into_py_any(py).unwrap())
                 } else {
                     None
                 }
@@ -110,8 +103,8 @@ impl Dwarf {
     /// Get a dictionary mapping names to types corresponding to some
     /// NamedType
     pub fn get_named_types_dict(&self, py: Python<'_>, named_type: &NamedTypes)
-    -> PyResult<HashMap<String, PyObject>> {
-        let mut type_map: HashMap<String, PyObject> = HashMap::new();
+    -> PyResult<HashMap<String, Py<PyAny>>> {
+        let mut type_map: HashMap<String, Py<PyAny>> = HashMap::new();
         match named_type {
             NamedTypes::Struct => {
                 let inner = self.inner.clone();
@@ -120,7 +113,7 @@ impl Dwarf {
                     type_map.insert(k, Struct {
                         inner: v,
                         dwarf: self.clone()
-                    }.into_py(py));
+                    }.into_py_any(py).unwrap());
                 }
             },
             NamedTypes::Enum => {
@@ -130,7 +123,7 @@ impl Dwarf {
                     type_map.insert(k, Enum {
                         inner: v,
                         dwarf: self.clone()
-                    }.into_py(py));
+                    }.into_py_any(py).unwrap());
                 }
             },
             NamedTypes::Typedef => {
@@ -140,7 +133,7 @@ impl Dwarf {
                     type_map.insert(k, Typedef {
                         inner: v,
                         dwarf: self.clone()
-                    }.into_py(py));
+                    }.into_py_any(py).unwrap());
                 }
             },
             NamedTypes::Union => {
@@ -150,7 +143,7 @@ impl Dwarf {
                     type_map.insert(k, Union {
                         inner: v,
                         dwarf: self.clone()
-                    }.into_py(py));
+                    }.into_py_any(py).unwrap());
                 }
             },
             NamedTypes::Base => {
@@ -160,7 +153,7 @@ impl Dwarf {
                     type_map.insert(k, Base {
                         inner: v,
                         dwarf: self.clone()
-                    }.into_py(py));
+                    }.into_py_any(py).unwrap());
                 }
             }
             NamedTypes::Variable => {
@@ -170,7 +163,7 @@ impl Dwarf {
                     type_map.insert(k, Variable {
                         inner: v,
                         dwarf: self.clone()
-                    }.into_py(py));
+                    }.into_py_any(py).unwrap());
                 }
             }
         };
@@ -179,8 +172,8 @@ impl Dwarf {
 
     /// Get a list of tuples of (name, type) corresponding to some NamedType.
     pub fn get_named_types(&self, py: Python<'_>, named_type: &NamedTypes)
-    -> PyResult<Vec<(String, PyObject)>> {
-        let mut types: Vec<(String, PyObject)> = Vec::new();
+    -> PyResult<Vec<(String, Py<PyAny>)>> {
+        let mut types: Vec<(String, Py<PyAny>)> = Vec::new();
         match named_type {
             NamedTypes::Struct => {
                 let found = self.inner.get_named_types::<crate::Struct>()?;
@@ -188,7 +181,7 @@ impl Dwarf {
                     types.push((k, Struct {
                         inner: v,
                         dwarf: self.clone()
-                    }.into_py(py)))
+                    }.into_py_any(py).unwrap()))
                 }
             },
             NamedTypes::Enum => {
@@ -197,7 +190,7 @@ impl Dwarf {
                     types.push((k, Enum {
                         inner: v,
                         dwarf: self.clone()
-                    }.into_py(py)))
+                    }.into_py_any(py).unwrap()))
                 }
             },
             NamedTypes::Typedef => {
@@ -206,7 +199,7 @@ impl Dwarf {
                     types.push((k, Typedef {
                         inner: v,
                         dwarf: self.clone()
-                    }.into_py(py)))
+                    }.into_py_any(py).unwrap()))
                 }
             },
             NamedTypes::Union => {
@@ -215,7 +208,7 @@ impl Dwarf {
                     types.push((k, Union {
                         inner: v,
                         dwarf: self.clone()
-                    }.into_py(py)))
+                    }.into_py_any(py).unwrap()))
                 }
             },
             NamedTypes::Base => {
@@ -224,7 +217,7 @@ impl Dwarf {
                     types.push((k, Base {
                         inner: v,
                         dwarf: self.clone()
-                    }.into_py(py)))
+                    }.into_py_any(py).unwrap()))
                 }
             },
             NamedTypes::Variable => {
@@ -233,7 +226,7 @@ impl Dwarf {
                     types.push((k, Variable {
                         inner: v,
                         dwarf: self.clone()
-                    }.into_py(py)))
+                    }.into_py_any(py).unwrap()))
                 }
             }
         };
@@ -241,64 +234,96 @@ impl Dwarf {
     }
 }
 
-/// Load a DWARF file by path
-#[pyfunction]
-fn load_dwarf_path(path: PathBuf) -> PyResult<Dwarf> {
-    let file = File::open(path)?;
-    let mmap = unsafe { Mmap::map(&file) }?;
-    let dwarf = crate::dwarf::OwnedDwarf::load(&*mmap)?;
-    Ok(Dwarf { inner: Arc::new(dwarf) })
-}
+#[pymodule]
+mod dwat {
+    use pyo3::types::PyAnyMethods;
+    use pyo3::prelude::*;
+    use memmap2::Mmap;
+    use libc::dup;
+    use std::path::PathBuf;
+    use std::fs::File;
+    use std::sync::Arc;
+    #[cfg(target_family = "unix")]
+    use std::os::unix::io::FromRawFd;
 
-/// Load a DWARF file from a python File IO object (unix only)
-#[pyfunction]
-#[cfg(target_family = "unix")]
-fn load_dwarf(file: &PyAny) -> PyResult<Dwarf> {
-    let fd: i32 = file.call_method0("fileno")?.extract()?;
+    #[pymodule_export]
+    use super::Dwarf;
 
-    // need to duplicate the file descriptor, otherwise rust takes ownership
-    // of it when from_raw_fd is called and will close it once it goes out of
-    // scope
-    let dup_fd = unsafe { dup(fd) };
-    if dup_fd == -1 {
-        return Err(PyErr::new::<pyo3::exceptions::PyOSError, _>(
-            "Failed to duplicate file descriptor"
-        ));
+    /// Load a DWARF file by path
+    #[pyfunction]
+    fn load_dwarf_path(path: PathBuf) -> PyResult<Dwarf> {
+        let file = File::open(path)?;
+        let mmap = unsafe { Mmap::map(&file) }?;
+        let dwarf = crate::dwarf::OwnedDwarf::load(&*mmap)?;
+        Ok(Dwarf { inner: Arc::new(dwarf) })
     }
 
-    let file = unsafe { std::fs::File::from_raw_fd(dup_fd as i32) };
-    let mmap = unsafe { Mmap::map(&file) }?;
-    let dwarf = crate::dwarf::OwnedDwarf::load(&*mmap)?;
-    Ok(Dwarf { inner: Arc::new(dwarf) })
-}
-
-#[pymodule]
-fn dwat(_py: Python, m: &PyModule) -> PyResult<()> {
-    m.add_class::<Dwarf>()?;
-
+    /// Load a DWARF file from a python File IO object (unix only)
+    #[pyfunction]
     #[cfg(target_family = "unix")]
-    m.add_function(wrap_pyfunction!(load_dwarf, m)?)?;
+    fn load_dwarf(file: &Bound<PyAny>) -> PyResult<Dwarf> {
+        let fd: i32 = file.call_method0("fileno")?.extract()?;
 
-    m.add_function(wrap_pyfunction!(load_dwarf_path, m)?)?;
+        // need to duplicate the file descriptor, otherwise rust takes ownership
+        // of it when from_raw_fd is called and will close it once it goes out of
+        // scope
+        let dup_fd = unsafe { dup(fd) };
+        if dup_fd == -1 {
+            return Err(PyErr::new::<pyo3::exceptions::PyOSError, _>(
+                "Failed to duplicate file descriptor"
+            ));
+        }
 
-    m.add_class::<NamedTypes>()?;
+        let file = unsafe { std::fs::File::from_raw_fd(dup_fd as i32) };
+        let mmap = unsafe { Mmap::map(&file) }?;
+        let dwarf = crate::dwarf::OwnedDwarf::load(&*mmap)?;
+        Ok(Dwarf { inner: Arc::new(dwarf) })
+    }
 
-    m.add_class::<Member>()?;
-    m.add_class::<Parameter>()?;
+
+    #[pymodule_export]
+    use super::NamedTypes;
+
+    #[pymodule_export]
+    use super::Member;
+
+    #[pymodule_export]
+    use super::Parameter;
 
     // Types
-    m.add_class::<Struct>()?;
-    m.add_class::<Array>()?;
-    m.add_class::<Enum>()?;
-    m.add_class::<Pointer>()?;
-    m.add_class::<Subroutine>()?;
-    m.add_class::<Typedef>()?;
-    m.add_class::<Union>()?;
-    m.add_class::<Base>()?;
-    m.add_class::<Const>()?;
-    m.add_class::<Volatile>()?;
-    m.add_class::<Restrict>()?;
-    m.add_class::<Variable>()?;
+    #[pymodule_export]
+    use super::Struct;
 
-    Ok(())
+    #[pymodule_export]
+    use super::Array;
+
+    #[pymodule_export]
+    use super::Enum;
+
+    #[pymodule_export]
+    use super::Pointer;
+
+    #[pymodule_export]
+    use super::Subroutine;
+
+    #[pymodule_export]
+    use super::Typedef;
+
+    #[pymodule_export]
+    use super::Union;
+
+    #[pymodule_export]
+    use super::Base;
+
+    #[pymodule_export]
+    use super::Const;
+
+    #[pymodule_export]
+    use super::Volatile;
+
+    #[pymodule_export]
+    use super::Restrict;
+
+    #[pymodule_export]
+    use super::Variable;
 }
