@@ -20,7 +20,7 @@ classifiers = [
 ]
 license = {file = "LICENSE"}
 authors = [
-  {name = "Justin Miller"}
+  {name = "Jennifer Miller"}
 ]
 
 [project.urls]

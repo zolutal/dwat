@@ -17,7 +17,7 @@ class Dwarf:
     def get_named_types(self, named_type: NamedType) -> list[tuple[str, Struct | Array | Enum | Pointer | Subroutine | Typedef | Union | Base | Const | Volatile | Restrict | Variable]]: ...
 
 class Struct:
-    def members(self) -> list[dwat.Member]: ...
+    def members(self) -> list[Member]: ...
     byte_size: int | None
     name: str | None
 
@@ -46,7 +46,7 @@ class Typedef:
     name: str | None
 
 class Union:
-    def members(self) -> list[dwat.Member]: ...
+    def members(self) -> list[Member]: ...
     byte_size: int | None
     name: str | None
 
