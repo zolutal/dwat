@@ -1,6 +1,6 @@
 [package]
 name = "dwat"
-version = "0.7.3"
+version = "0.7.4"
 edition = "2021"
 license = "BSD-2-Clause"
 description = "A library for accessing DWARF v4/v5 type information"
