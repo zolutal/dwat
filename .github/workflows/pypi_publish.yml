@@ -54,9 +54,7 @@ jobs:
           args: --release --out dist --find-interpreter
           sccache: 'true'
       - name: set platform/target name for artifact
-        run: |
-          target=${{ matrix.target }}
-          echo "ARTIFACT_NAME=wheels-windows-${target}" >> $GITHUB_ENV
+        run: echo "ARTIFACT_NAME=wheels-windows-${{ matrix.target }}" >> $GITHUB_ENV
       - name: Upload wheels
         uses: actions/upload-artifact@v4
         with:
