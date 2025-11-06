@@ -7,7 +7,7 @@ use crate::dwarf::borrowable_dwarf::BorrowableDwarf;
 use crate::types::unit_has_members::UnitHasMembers;
 use crate::types::unit_inner_type::UnitInnerType;
 use crate::types::unit_name_type::UnitNamedType;
-use crate::format::format_member;
+use crate::format::{format_member, format_type};
 use crate::Error;
 
 /// Represents a struct type
@@ -86,6 +86,13 @@ pub struct FormalParameter {
 #[derive(Clone, Copy, Debug)]
 pub struct Variable {
     pub location: DwarfUnit,
+}
+
+/// Represents a value of an enum option
+#[derive(Clone, Debug)]
+pub struct Enumerator {
+    pub name: String,
+    pub value: u64,
 }
 
 /// Represents a field of a struct or union
@@ -1121,6 +1128,37 @@ impl Enum {
         self.location
     }
 
+    pub fn to_string_verbose<D>(&self, dwarf: &D, verbosity: u8)
+    -> Result<String, Error>
+    where D: DwarfContext + BorrowableDwarf {
+        let mut repr = String::new();
+        let _: Result<_, Error> = dwarf.unit_context(&self.location, |unit| {
+            let level = 0;
+            let tab_level = 0;
+            let base_offset = 0;
+            repr.push_str(
+                &format_type(
+                    dwarf,
+                    unit,
+                    "".to_string(),
+                    Type::Enum(*self),
+                    level,
+                    tab_level,
+                    verbosity,
+                    base_offset
+                )?
+            );
+            repr.push_str(";");
+            Ok(())
+        })?;
+        Ok(repr)
+    }
+
+    pub fn to_string<D>(&self, dwarf: &D)
+    -> Result<String, Error>
+    where D: DwarfContext + BorrowableDwarf {
+        self.to_string_verbose(dwarf, 0)
+    }
     /// internal byte_size on CU
     pub(crate) fn u_byte_size(&self, unit: &GimliCU) -> Result<usize, Error> {
         let entry_size = unit.entry_context(&self.location(), |entry| {
@@ -1141,6 +1179,39 @@ impl Enum {
         dwarf.unit_context(&self.location(), |unit| {
             self.u_byte_size(unit)
         })?
+    }
+
+    pub fn enumerators<D>(&self, dwarf: &D) -> Result<Vec<Enumerator>, Error>
+    where D: DwarfContext + BorrowableDwarf {
+        let mut enumers: Vec<Enumerator> = Vec::new();
+        dwarf.unit_context(&self.location(), |unit| {
+            let mut entries = {
+                match unit.entries_at_offset(self.location().entry_offset) {
+                    Ok(entries) => entries,
+                    _ => return Err(Error::DIEError(
+                       format!("Failed to seek to DIE at {:?}", self.location())
+                    ))
+                }
+            };
+            if entries.next_dfs().is_err() {
+                return Err(Error::DIEError(
+                    format!("Failed to find next DIE at {:?}", self.location())
+                ))
+            }
+            while let Ok(Some((_, entry))) = entries.next_dfs() {
+                if entry.tag() != gimli::DW_TAG_enumerator {
+                    break;
+                }
+                let name = get_entry_name(dwarf, entry)?;
+                if let Ok(Some(at)) = entry.attr(gimli::DW_AT_const_value) {
+                    if let Some(attr_val) = at.udata_value() {
+                        enumers.push(Enumerator {name, value: attr_val})
+                    }
+                };
+            };
+            Ok(())
+        })??;
+        Ok(enumers)
     }
 }
 

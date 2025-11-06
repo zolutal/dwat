@@ -293,8 +293,16 @@ impl Enum {
         Ok(to_py_object(py, self.inner.get_type(dwarf)?, &self.dwarf))
     }
 
+    pub fn __str__(&self) -> PyResult<String> {
+        Ok(self.inner.to_string(&*self.dwarf.inner)?)
+    }
+
     pub fn __repr__(&self) -> PyResult<String> {
-        Ok("<Enum>".to_string())
+        if let Ok(Some(name)) = self.name() {
+            Ok(format!("<Enum: {name}>"))
+        } else {
+            Ok("<Enum>".to_string())
+        }
     }
 }
 

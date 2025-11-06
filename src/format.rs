@@ -6,10 +6,16 @@ use crate::unit_name_type::UnitNamedType;
 use crate::{Member, Error, Type};
 use crate::dwarf::{DwarfContext, GimliCU};
 
-pub fn format_type<D>(dwarf: &D, unit: &GimliCU, member_name: String, typ: Type,
-                      level: usize, tablevel: usize, verbosity: u8,
-                      base_offset: usize)
--> Result<String, Error>
+pub fn format_type<D>(
+    dwarf: &D,
+    unit: &GimliCU,
+    member_name: String,
+    typ: Type,
+    level: usize,
+    tablevel: usize,
+    verbosity: u8,
+    base_offset: usize
+) -> Result<String, Error>
 where D: DwarfContext + BorrowableDwarf {
     let mut out = String::new();
     match typ {
@@ -73,7 +79,12 @@ where D: DwarfContext + BorrowableDwarf {
                     for _ in 0..=tablevel {
                         out.push_str("    ");
                     }
-                    out.push('}');
+
+                    if member_name.is_empty() {
+                        out.push_str(&format!("}}"));
+                    } else {
+                        out.push_str(&format!("}} {member_name}"));
+                    }
                     return Ok(out);
                 }
                 Err(e) => return Err(e)
@@ -84,19 +95,38 @@ where D: DwarfContext + BorrowableDwarf {
                 Ok(name) => {
                     if level == 0 {
                         out.push_str(
-                            &format!("enum {name} {member_name}")
+                            &format!("enum {name} {{\n")
                         );
+                        for enr in t.enumerators(dwarf)? {
+                            out.push_str(
+                                &format!("    {} = {},\n", enr.name, enr.value)
+                            );
+                        }
+                        out.push_str(&format!("}}"));
                         return Ok(out)
                     }
                     // TODO: print enum members
+                    // TODO? but should we really?
                     out.push_str(&format!("enum {name}"));
                 }
                 Err(Error::NameAttributeNotFound) => {
                     if level == 0 {
-                        out.push_str(&format!("enum {member_name}"));
+                        out.push_str(&format!("enum {{\n"));
+                        for enr in t.enumerators(dwarf)? {
+                            for _ in 0..=tablevel {
+                                out.push_str("    ");
+                            }
+                            out.push_str(
+                                &format!("    {} = {},\n", enr.name, enr.value)
+                            );
+                        }
+                        for _ in 0..=tablevel {
+                            out.push_str("    ");
+                        }
+                        out.push_str(&format!("}} {member_name}"));
                         return Ok(out)
                     }
-                    // TODO: print enum members
+                    // unreachable (under normal circumstances)?
                     out.push_str("enum");
                 }
                 Err(e) => return Err(e)
