@@ -341,8 +341,13 @@ where D: DwarfContext + BorrowableDwarf {
         }
 
         let bytesz = member.u_byte_size(unit)?;
-        formatted.push_str(&format!("\t/* {bytesz: >4} | \
-                                          {offset: >4} */"));
+        if let Ok(bitsize) = member.u_bit_size(unit) {
+            formatted.push_str(&format!("\t/* {bytesz: >2}:{bitsize} | \
+                                              {offset: >4} */"));
+        } else {
+            formatted.push_str(&format!("\t/* {bytesz: >4} | \
+                                              {offset: >4} */"));
+        }
     }
 
     formatted.push('\n');
