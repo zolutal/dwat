@@ -452,7 +452,7 @@ fn get_entry_byte_size(entry: &GimliDIE) -> Result<usize, Error> {
 }
 
 // Try to retrieve the alignment attribute if one exists, alignment was added
-// in DWARF 5 but gcc will inlcude it even for -gdwarf-4
+// in DWARF 5 but gcc will include it even for -gdwarf-4
 // DW_AT_alignment : constant
 fn get_entry_alignment(entry: &GimliDIE) -> Result<usize, Error> {
     if let Ok(opt_attr) = entry.attr(gimli::DW_AT_alignment) {
@@ -802,6 +802,11 @@ impl Member {
                         },
                         _ => { }
                     }
+                } else if let Ok(Some(attr)) = entry.attr(gimli::DW_AT_data_bit_offset) {
+                    if let Some(attr_val) = attr.udata_value() {
+                        return Ok((attr_val / 8) as usize)
+                    }
+                    unreachable!()
                 } else {
                     return Err(Error::MemberLocationAttributeNotFound)
                 }
