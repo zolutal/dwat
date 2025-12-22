@@ -9,7 +9,7 @@ use crate::dwarf::{DwarfContext, GimliCU};
 pub fn format_type<D>(
     dwarf: &D,
     unit: &GimliCU,
-    member_name: String,
+    member_name: Option<String>,
     typ: Type,
     level: usize,
     tablevel: usize,
@@ -21,7 +21,7 @@ where D: DwarfContext + BorrowableDwarf {
     match typ {
         Type::Array(a) => {
             let inner = a.u_get_type(unit)?;
-            let inner_fmt = format_type(dwarf, unit, "".to_string(), inner,
+            let inner_fmt = format_type(dwarf, unit, None, inner,
                                         level+1, tablevel, verbosity,
                                         base_offset)?;
             out.push_str(&inner_fmt);
@@ -29,7 +29,7 @@ where D: DwarfContext + BorrowableDwarf {
                 out.push(' ');
             }
             if level == 0 {
-                out.push_str(&member_name);
+                out.push_str(&member_name.unwrap_or(String::new()));
             }
 
             let bound = a.u_get_bound(unit)?;
@@ -47,7 +47,7 @@ where D: DwarfContext + BorrowableDwarf {
             let name = t.u_name(dwarf, unit)?;
             if level == 0 {
                 out.push_str(
-                    &format!("{name} {member_name}")
+                    &format!("{name} {}", member_name.unwrap_or(String::new()))
                 );
                 return Ok(out);
             }
@@ -59,7 +59,7 @@ where D: DwarfContext + BorrowableDwarf {
                 Ok(name) => {
                     if level == 0 {
                         out.push_str(
-                            &format!("struct {name} {member_name}")
+                            &format!("struct {name} {}", member_name.unwrap_or(String::new()))
                         );
                         return Ok(out);
                     }
@@ -80,10 +80,10 @@ where D: DwarfContext + BorrowableDwarf {
                         out.push_str("    ");
                     }
 
-                    if member_name.is_empty() {
-                        out.push_str(&format!("}}"));
-                    } else {
+                    if let Some(member_name) = member_name {
                         out.push_str(&format!("}} {member_name}"));
+                    } else {
+                        out.push_str(&format!("}}"));
                     }
                     return Ok(out);
                 }
@@ -93,7 +93,9 @@ where D: DwarfContext + BorrowableDwarf {
         Type::Enum(t) => {
             match t.u_name(dwarf, unit) {
                 Ok(name) => {
-                    if level == 0 {
+                    if let Some(member_name) = member_name {
+                        out.push_str(&format!("enum {name} {member_name}"));
+                    } else if level == 0 {
                         out.push_str(
                             &format!("enum {name} {{\n")
                         );
@@ -102,32 +104,32 @@ where D: DwarfContext + BorrowableDwarf {
                                 &format!("    {} = {},\n", enr.name, enr.value)
                             );
                         }
-                        out.push_str(&format!("}}"));
+                        out.push('}');
                         return Ok(out)
+                    } else {
+                        out.push_str(&format!("enum {name}"));
                     }
-                    // TODO: print enum members
-                    // TODO? but should we really?
-                    out.push_str(&format!("enum {name}"));
                 }
                 Err(Error::NameAttributeNotFound) => {
-                    if level == 0 {
-                        out.push_str(&format!("enum {{\n"));
-                        for enr in t.enumerators(dwarf)? {
-                            for _ in 0..=tablevel {
-                                out.push_str("    ");
-                            }
-                            out.push_str(
-                                &format!("    {} = {},\n", enr.name, enr.value)
-                            );
-                        }
+                    // probably just always print anon enums?
+                    out.push_str(&format!("enum {{\n"));
+                    for enr in t.enumerators(dwarf)? {
                         for _ in 0..=tablevel {
                             out.push_str("    ");
                         }
-                        out.push_str(&format!("}} {member_name}"));
-                        return Ok(out)
+                        out.push_str(
+                            &format!("    {} = {},\n", enr.name, enr.value)
+                        );
                     }
-                    // unreachable (under normal circumstances)?
-                    out.push_str("enum");
+                    for _ in 0..=tablevel {
+                        out.push_str("    ");
+                    }
+                    if let Some(member_name) = member_name {
+                        out.push_str(&format!("}} {member_name}"));
+                    } else {
+                        out.push('}')
+                    }
+                    return Ok(out)
                 }
                 Err(e) => return Err(e)
             }
@@ -138,7 +140,7 @@ where D: DwarfContext + BorrowableDwarf {
                 Ok(name) => {
                     if level == 0 {
                         out.push_str(
-                            &format!("union {name} {member_name}")
+                            &format!("union {name} {}", member_name.unwrap_or(String::new()))
                         );
                         return Ok(out);
                     }
@@ -166,7 +168,7 @@ where D: DwarfContext + BorrowableDwarf {
         Type::Base(t) => {
             let name = t.u_name(dwarf, unit)?;
             if level == 0 {
-                out.push_str(&format!("{name} {member_name}"));
+                out.push_str(&format!("{name} {}", member_name.unwrap_or(String::new())));
                 return Ok(out);
             }
             out.push_str(&name);
@@ -178,7 +180,7 @@ where D: DwarfContext + BorrowableDwarf {
             for pidx in 0..params.len() {
                 let param = params[pidx].u_get_type(unit)?;
                 // recursively convert type to string
-                out.push_str(&format_type(dwarf, unit, "".to_string(),
+                out.push_str(&format_type(dwarf, unit, None,
                                           param, level+1, tablevel, verbosity,
                                           base_offset)?);
                 if pidx != params.len()-1 {
@@ -193,7 +195,7 @@ where D: DwarfContext + BorrowableDwarf {
             if let Ok(Type::Subroutine(subp)) = inner {
 
                 let return_type = match subp.u_get_type(unit) {
-                    Ok(rtype) => format_type(dwarf, unit, "".to_string(), rtype,
+                    Ok(rtype) => format_type(dwarf, unit, None, rtype,
                                              level+1, tablevel, verbosity,
                                              base_offset)?,
                     Err(Error::TypeAttributeNotFound) => "void".to_string(),
@@ -201,12 +203,13 @@ where D: DwarfContext + BorrowableDwarf {
                 };
 
                 let argstr = {
-                    format_type(dwarf, unit, "".to_string(),
+                    format_type(dwarf, unit, None,
                                 Type::Subroutine(subp),
                                 level+1, tablevel, verbosity,
                                 base_offset)?
                 };
 
+                let member_name = member_name.unwrap_or(String::new());
                 out.push_str(
                     &format!("{return_type} (*{member_name})({argstr})")
                 );
@@ -217,7 +220,7 @@ where D: DwarfContext + BorrowableDwarf {
 
             let ptr_type = match inner {
                 Ok(inner) => {
-                    format_type(dwarf, unit, "".to_string(), inner,
+                    format_type(dwarf, unit, None, inner,
                                 level+1, tablevel, verbosity,
                                 base_offset)?
                 },
@@ -235,7 +238,7 @@ where D: DwarfContext + BorrowableDwarf {
             }
 
             if level == 0 {
-                out.push_str(&member_name);
+                out.push_str(&member_name.unwrap_or(String::new()));
                 return Ok(out);
             }
             return Ok(out);
@@ -244,7 +247,7 @@ where D: DwarfContext + BorrowableDwarf {
             let inner = c.u_get_type(unit);
             match inner {
                 Ok(inner) => {
-                    let inner_fmt = format_type(dwarf, unit, "".to_string(),
+                    let inner_fmt = format_type(dwarf, unit, None,
                                                 inner, level+1, tablevel,
                                                 verbosity, base_offset)?;
                     out.push_str(&format!("const {inner_fmt}"));
@@ -257,7 +260,7 @@ where D: DwarfContext + BorrowableDwarf {
         },
         Type::Volatile(c) => {
             let inner = c.u_get_type(unit)?;
-            let inner_fmt = format_type(dwarf, unit, "".to_string(), inner,
+            let inner_fmt = format_type(dwarf, unit, None, inner,
                                         level+1, tablevel, verbosity,
                                         base_offset)?;
             out.push_str(&format!("volatile {inner_fmt}"));
@@ -265,7 +268,7 @@ where D: DwarfContext + BorrowableDwarf {
         },
         Type::Restrict(c) => {
             let inner = c.u_get_type(unit)?;
-            let inner_fmt = format_type(dwarf, unit, "".to_string(), inner,
+            let inner_fmt = format_type(dwarf, unit, None, inner,
                                         level+1, tablevel, verbosity,
                                         base_offset)?;
             out.push_str(&format!("{inner_fmt} restrict"));
@@ -292,13 +295,13 @@ pub fn format_member<D>(
 where D: DwarfContext + BorrowableDwarf {
     let mtype = member.u_get_type(unit)?;
     let name = match member.u_name(dwarf, unit) {
-        Ok(name) => name,
+        Ok(name) => Some(name),
         Err(Error::NameAttributeNotFound) => {
             // members can be anon structs or unions
             // it would be nice to check for those cases and propogate the error
             // otherwise, but type modifiers would also need to be stripped...
             // just excluding the name on error is probably fine tbh
-            "".to_string()
+            None
         },
         Err(e) => return Err(e)
     };

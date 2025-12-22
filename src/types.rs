@@ -240,11 +240,11 @@ impl Type {
             Type::Volatile(vol) => {
                 vol.byte_size(dwarf)
             }
-            Type::Restrict(vol) => {
-                vol.byte_size(dwarf)
+            Type::Restrict(res) => {
+                res.byte_size(dwarf)
             }
-            Type::Variable(vol) => {
-                vol.byte_size(dwarf)
+            Type::Variable(var) => {
+                var.byte_size(dwarf)
             }
             // --- Unsized ---
             Type::Subroutine(_) => {
@@ -1145,7 +1145,7 @@ impl Enum {
                 &format_type(
                     dwarf,
                     unit,
-                    "".to_string(),
+                    None,
                     Type::Enum(*self),
                     level,
                     tab_level,
