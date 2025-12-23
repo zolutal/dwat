@@ -69,7 +69,7 @@ fn main() -> anyhow::Result<()> {
                                      .unwrap_or("<unknown>".to_string());
                 let decl_line = struc.decl_line(&dwarf)?;
                 if location {
-                    println!("/* definition for struct {name} from {decl_file}:{decl_line} */");
+                    println!("/* definition of struct {name} from {decl_file}:{decl_line} */");
                 }
                 println!("{}", struc.to_string_verbose(&dwarf, verbosity)?);
                 std::process::exit(0);
