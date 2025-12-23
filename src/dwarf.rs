@@ -117,6 +117,11 @@ where Self: Sized + DwarfContext {
         let mut item: Option<T> = None;
         self.borrow_dwarf(|dwarf| {
             let _ = for_each_tagged_entry::<T, _>(dwarf, |_, entry, loc| {
+                // TODO should this be done for all types or just structs?
+                if let Ok(Some(_)) = entry.attr(gimli::DW_AT_declaration) {
+                    return Ok(false)
+                }
+
                 if let Ok(entry_name) = get_entry_name(self, entry) {
                     if name == entry_name {
                         item = Some(T::new(loc));

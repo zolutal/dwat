@@ -267,7 +267,7 @@ where D: DwarfContext + BorrowableDwarf {
     })
 }
 
-// Try to retrieve a string from the debug_str section for a given offset
+// Try to retrieve a string from the debug_line_str section for a given offset
 pub(crate) fn from_dbg_line_str_ref<D>(dwarf: &D, str_ref: DebugLineStrOffset<usize>)
 -> Option<String>
 where D: DwarfContext + BorrowableDwarf {
@@ -278,6 +278,41 @@ where D: DwarfContext + BorrowableDwarf {
         }
         None
     })
+}
+
+// Try to retrieve a string from the debug_line section for a given offset
+pub(crate) fn from_dbg_line_ref<D>(dwarf: &D, unit: &GimliCU, line_offset: usize) 
+-> Result<Option<String>, Error>
+where D: DwarfContext + BorrowableDwarf {
+    let program = match unit.line_program {
+        Some(ref program) => program,
+        None => return Ok(None)
+    };
+
+    let file = match program.header().file(line_offset as u64) {
+        Some(file) => file,
+        None => return Ok(None)
+    };
+
+    let mut out = String::new();
+
+    if let Some(AttributeValue::DebugLineStrRef(directory)) = file.directory(program.header()) {
+        if let Some(directory_str) = from_dbg_line_str_ref(dwarf, directory) {
+            out.push_str(&format!("{}/", directory_str));
+        }
+    };
+
+    if let AttributeValue::DebugLineStrRef(file_path) = file.path_name() {
+        if let Some(file_str) = from_dbg_line_str_ref(dwarf, file_path) {
+            out.push_str(&format!("{}", file_str));
+        } else {
+            return Ok(None)
+        }
+    } else {
+        return Ok(None)
+    }
+
+    Ok(Some(out))
 }
 
 // Try to retrieve the name attribute as a string for a DIE if one exists
@@ -462,6 +497,30 @@ fn get_entry_alignment(entry: &GimliDIE) -> Result<usize, Error> {
             }
         } else {
             return Err(Error::AlignmentAttributeNotFound)
+        }
+    }
+    Err(Error::InvalidAttributeError)
+}
+
+// Try to retrieve the decl_file attribute if it exists
+fn get_entry_decl_file_offset(entry: &GimliDIE) -> Result<usize, Error> {
+    if let Ok(opt_attr) = entry.attr(gimli::DW_AT_decl_file) {
+        if let Some(attr) = opt_attr {
+            if let Some(offset) = attr.udata_value() {
+                return Ok(offset as usize)
+            }
+        }
+    }
+    Err(Error::InvalidAttributeError)
+}
+
+// Try to retrieve the decl_line attribute if it exists
+fn get_entry_decl_line(entry: &GimliDIE) -> Result<usize, Error> {
+    if let Ok(opt_attr) = entry.attr(gimli::DW_AT_decl_line) {
+        if let Some(attr) = opt_attr {
+            if let Some(offset) = attr.udata_value() {
+                return Ok(offset as usize)
+            }
         }
     }
     Err(Error::InvalidAttributeError)
@@ -1059,6 +1118,40 @@ impl Struct {
     where D: DwarfContext {
         dwarf.unit_context(&self.location, |unit| {
             self.u_alignment(unit)
+        })?
+    }
+
+    pub(crate) fn u_decl_file<D>(&self, dwarf: &D, unit: &GimliCU) -> Result<Option<String>, Error>
+    where D: DwarfContext + BorrowableDwarf {
+        let offset = unit.entry_context(&self.location(), |entry| {
+            get_entry_decl_file_offset(entry)
+        })??;
+
+        // offset of zero means not associated with a file. 
+        if offset > 0 {
+            from_dbg_line_ref(dwarf, unit, offset-1)
+        } else {
+            Ok(None)
+        }
+    }
+
+    pub fn decl_file<D>(&self, dwarf: &D) -> Result<Option<String>, Error>
+    where D: DwarfContext + BorrowableDwarf {
+        dwarf.unit_context(&self.location, |unit| {
+            self.u_decl_file(dwarf, unit)
+        })?
+    }
+
+    pub(crate) fn u_decl_line(&self, unit: &GimliCU) -> Result<usize, Error> {
+        unit.entry_context(&self.location(), |entry| {
+            get_entry_decl_line(entry)
+        })?
+    }
+
+    pub fn decl_line<D>(&self, dwarf: &D) -> Result<usize, Error>
+    where D: DwarfContext {
+        dwarf.unit_context(&self.location, |unit| {
+            self.u_decl_line(unit)
         })?
     }
 }

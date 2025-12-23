@@ -27,6 +27,10 @@ enum Commands {
         #[clap(long, action, help = "Prints sizes and offsets of struct \
                                      fields.")]
         verbose: bool,
+
+        /// Print location string for the struct containing the path and line number it was found
+        #[clap(long, action)]
+        location: bool,
     },
     /// Find and display all structs
     Dump {
@@ -51,7 +55,7 @@ fn main() -> anyhow::Result<()> {
     let args = CmdArgs::parse();
 
     match args.commands {
-        Commands::Lookup { dwarf_file, name, verbose } => {
+        Commands::Lookup { dwarf_file, name, verbose, location } => {
             let file = File::open(dwarf_file)?;
             let mmap = &*unsafe { Mmap::map(&file) }?;
 
@@ -61,6 +65,12 @@ fn main() -> anyhow::Result<()> {
 
             let res = dwarf.lookup_type::<dwat::Struct>(name.clone())?;
             if let Some(struc) = res {
+                let decl_file = struc.decl_file(&dwarf)?
+                                     .unwrap_or("<unknown>".to_string());
+                let decl_line = struc.decl_line(&dwarf)?;
+                if location {
+                    println!("/* definition for struct {name} from {decl_file}:{decl_line} */");
+                }
                 println!("{}", struc.to_string_verbose(&dwarf, verbosity)?);
                 std::process::exit(0);
             } else {
